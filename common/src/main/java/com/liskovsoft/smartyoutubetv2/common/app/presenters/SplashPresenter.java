@@ -5,7 +5,6 @@ import android.content.Context;
 import android.content.Intent;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
 import com.liskovsoft.sharedutils.helpers.AppInfoHelpers;
-import com.liskovsoft.sharedutils.helpers.FileHelpers;
 import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.sharedutils.helpers.MessageHelpers;
 import com.liskovsoft.sharedutils.mylogger.Log;
@@ -15,15 +14,17 @@ import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.service.VideoStateService;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.base.BasePresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.AccountSelectionPresenter;
+import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.BootDialogPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.views.SplashView;
 import com.liskovsoft.smartyoutubetv2.common.app.views.ViewManager;
+import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
 import com.liskovsoft.smartyoutubetv2.common.misc.StreamReminderService;
-import com.liskovsoft.smartyoutubetv2.common.prefs.AppPrefs;
+import com.liskovsoft.smartyoutubetv2.common.prefs.AccountsData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.GeneralData;
 import com.liskovsoft.smartyoutubetv2.common.utils.IntentExtractor;
 import com.liskovsoft.smartyoutubetv2.common.utils.SimpleEditDialog;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
-import com.liskovsoft.youtubeapi.service.YouTubeMediaService;
+import com.liskovsoft.youtubeapi.service.YouTubeHubService;
 import io.reactivex.disposables.Disposable;
 
 import java.util.ArrayList;
@@ -35,8 +36,10 @@ public class SplashPresenter extends BasePresenter<SplashView> {
     @SuppressLint("StaticFieldLeak")
     private static SplashPresenter sInstance;
     private static boolean sRunOnce;
+    private boolean mRunPerInstance;
     private final List<IntentProcessor> mIntentChain = new ArrayList<>();
     private Disposable mRefreshCachePeriodicAction;
+    private String mBridgePackageName;
 
     private interface IntentProcessor {
         boolean process(Intent intent);
@@ -58,46 +61,68 @@ public class SplashPresenter extends BasePresenter<SplashView> {
 
     public static void unhold() {
         sInstance = null;
-        sRunOnce = false;
     }
 
     @Override
     public void onViewInitialized() {
+        if (getView() == null) {
+            return;
+        }
+
+        applyRunPerInstanceTasks();
         applyRunOnceTasks();
 
-        runRefreshCachePeriodicTask();
-        showAccountSelection();
+        //runRefreshCachePeriodicTask();
+        showAccountSelectionIfNeeded();
 
-        if (getView() != null) {
-            checkMasterPassword(() -> applyNewIntent(getView().getNewIntent()));
+        checkMasterPassword(() -> applyNewIntent(getView().getNewIntent()));
+
+        checkAccountPassword();
+        showUpdateNotification();
+    }
+
+    private void applyRunPerInstanceTasks() {
+        if (!mRunPerInstance) {
+            mRunPerInstance = true;
+            //clearCache();
+            enableHistoryIfNeeded();
+            updateChannels();
+            initIntentChain();
+            // Fake service to prevent the app destroying?
+            //runRemoteControlFakeTask();
         }
     }
 
     private void applyRunOnceTasks() {
         if (!sRunOnce) {
-            //checkTouchSupport(); // Not working?
-            // Need to be the first line and executed on earliest stage once.
-            // Inits service language and context.
-            //Utils.initGlobalData(getContext()); // Init already done in BasePresenter
-            clearCache();
+            sRunOnce = true;
             RxHelper.setupGlobalErrorHandler();
-            initIntentChain();
-            updateChannels();
-            runRemoteControlTasks();
-            //setupKeepAlive();
-            //configureProxy();
-            //configureOpenVPN();
             initVideoStateService();
             initStreamReminderService();
-            sRunOnce = true;
         }
     }
 
-    private void showAccountSelection() {
+    private void showAccountSelectionIfNeeded() {
         AccountSelectionPresenter.instance(getContext()).show();
     }
 
-    private void runRemoteControlTasks() {
+    private void checkAccountPassword() {
+        AccountsData data = AccountsData.instance(getContext());
+        // Block even if the password was accepted before
+        if (data.getAccountPassword() != null) {
+            data.setPasswordAccepted(false);
+            PlaybackPresenter.instance(getContext()).forceFinish();
+            BrowsePresenter.instance(getContext()).updateSections();
+        }
+    }
+
+    private void showUpdateNotification() {
+        BootDialogPresenter updatePresenter = BootDialogPresenter.instance(getContext());
+        updatePresenter.start();
+        //updatePresenter.unhold();
+    }
+
+    private void runRemoteControlFakeTask() {
         // Fake service to prevent the app from destroying
         if (getContext() != null) {
             //Utils.startRemoteControlService(getContext());
@@ -123,7 +148,7 @@ public class SplashPresenter extends BasePresenter<SplashView> {
             if (GeneralData.instance(getContext()).getVersionCode() != versionCode) {
                 GeneralData.instance(getContext()).setVersionCode(versionCode);
 
-                FileHelpers.deleteCache(getContext());
+                //FileHelpers.deleteCache(getContext());
                 ViewManager.instance(getContext()).clearCaches();
             }
         }
@@ -134,7 +159,15 @@ public class SplashPresenter extends BasePresenter<SplashView> {
             return;
         }
 
-        mRefreshCachePeriodicAction = RxHelper.startInterval(YouTubeMediaService.instance()::refreshCacheIfNeeded, 30 * 60);
+        mRefreshCachePeriodicAction = RxHelper.startInterval(YouTubeHubService.instance()::refreshCacheIfNeeded, 30 * 60);
+    }
+
+    private void enableHistoryIfNeeded() {
+        // Account history might be turned off (common issue).
+        GeneralData generalData = GeneralData.instance(getContext());
+        if (generalData.getHistoryState() != GeneralData.HISTORY_AUTO) {
+            MediaServiceManager.instance().enableHistory(generalData.isHistoryEnabled());
+        }
     }
 
     private void checkTouchSupport() {
@@ -166,6 +199,10 @@ public class SplashPresenter extends BasePresenter<SplashView> {
         } else {
             Log.e(TAG, "Channels receiver class not found: " + CHANNELS_RECEIVER_CLASS_NAME);
         }
+    }
+
+    public String getBridgePackageName() {
+        return mBridgePackageName;
     }
 
     private void initIntentChain() {
@@ -270,6 +307,10 @@ public class SplashPresenter extends BasePresenter<SplashView> {
     }
 
     private void applyNewIntent(Intent intent) {
+        if (intent != null) {
+            mBridgePackageName = intent.getStringExtra("bridge_package_name");
+        }
+
         for (IntentProcessor processor : mIntentChain) {
             if (processor.process(intent)) {
                 break;
@@ -283,7 +324,7 @@ public class SplashPresenter extends BasePresenter<SplashView> {
         // No passwd or the app already started
         if (password == null || ViewManager.instance(getContext()).getTopView() != null) {
             onSuccess.run();
-            getView().finishView();
+            getView().finishView(); // critical part, fix black screen on app exit
         } else {
             SimpleEditDialog.show(
                     getContext(),
@@ -297,7 +338,7 @@ public class SplashPresenter extends BasePresenter<SplashView> {
                     },
                     getContext().getString(R.string.enter_master_password),
                     true,
-                    () -> getView().finishView()
+                    () -> getView().finishView() // critical part, fix black screen on app exit
             );
         }
     }

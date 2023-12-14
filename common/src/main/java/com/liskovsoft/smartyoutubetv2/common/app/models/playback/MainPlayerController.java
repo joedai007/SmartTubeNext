@@ -13,7 +13,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.Aut
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.CommentsController;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.ContentBlockController;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.HQDialogController;
-import com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.LiveChatController;
+import com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.ChatController;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.PlayerUIController;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.RemoteController;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.SuggestionsController;
@@ -46,31 +46,31 @@ public class MainPlayerController implements PlayerEventListener {
             mActivity = new WeakReference<>((Activity) context);
         }
 
-        SuggestionsController suggestionsLoader = new SuggestionsController();
-        VideoLoaderController videoLoader = new VideoLoaderController(suggestionsLoader);
-        PlayerUIController uiManager = new PlayerUIController(videoLoader);
+        SuggestionsController suggestionsController = new SuggestionsController();
+        VideoLoaderController videoLoader = new VideoLoaderController(suggestionsController);
+        PlayerUIController uiManager = new PlayerUIController(suggestionsController, videoLoader);
         VideoStateController stateUpdater = new VideoStateController();
         ContentBlockController contentBlockManager = new ContentBlockController();
-        LiveChatController liveChatManager = new LiveChatController();
+        ChatController liveChatManager = new ChatController();
         CommentsController commentsManager = new CommentsController();
 
-        RemoteController commandManager = new RemoteController(context, suggestionsLoader, videoLoader);
+        RemoteController commandManager = new RemoteController(context, suggestionsController, videoLoader);
         HQDialogController hqDialogManager = new HQDialogController(stateUpdater);
         AutoFrameRateController autoFrameRateManager = new AutoFrameRateController(hqDialogManager, stateUpdater);
 
-        suggestionsLoader.addMetadataListener(stateUpdater);
-        suggestionsLoader.addMetadataListener(uiManager);
-        suggestionsLoader.addMetadataListener(videoLoader);
-        suggestionsLoader.addMetadataListener(contentBlockManager);
-        suggestionsLoader.addMetadataListener(liveChatManager);
-        suggestionsLoader.addMetadataListener(commentsManager);
+        suggestionsController.addMetadataListener(stateUpdater);
+        suggestionsController.addMetadataListener(uiManager);
+        suggestionsController.addMetadataListener(videoLoader);
+        suggestionsController.addMetadataListener(contentBlockManager);
+        suggestionsController.addMetadataListener(liveChatManager);
+        suggestionsController.addMetadataListener(commentsManager);
 
         // NOTE: position matters!!!
         mEventListeners.add(autoFrameRateManager);
         mEventListeners.add(uiManager);
         mEventListeners.add(hqDialogManager);
         mEventListeners.add(stateUpdater);
-        mEventListeners.add(suggestionsLoader);
+        mEventListeners.add(suggestionsController);
         mEventListeners.add(videoLoader);
         mEventListeners.add(commandManager);
         mEventListeners.add(contentBlockManager);
@@ -211,8 +211,8 @@ public class MainPlayerController implements PlayerEventListener {
     }
 
     @Override
-    public void onEngineError(int type) {
-        process(listener -> listener.onEngineError(type));
+    public void onEngineError(int type, int rendererIndex, String message) {
+        process(listener -> listener.onEngineError(type, rendererIndex, message));
     }
 
     @Override
@@ -238,6 +238,11 @@ public class MainPlayerController implements PlayerEventListener {
     @Override
     public void onSeekEnd() {
         process(PlayerEventListener::onSeekEnd);
+    }
+
+    @Override
+    public void onSpeedChanged(float speed) {
+        process(listener -> listener.onSpeedChanged(speed));
     }
 
     @Override
@@ -305,11 +310,6 @@ public class MainPlayerController implements PlayerEventListener {
     }
 
     @Override
-    public void onSubscribeClicked(boolean subscribed) {
-        process(listener -> listener.onSubscribeClicked(subscribed));
-    }
-
-    @Override
     public void onDislikeClicked(boolean dislike) {
         process(listener -> listener.onDislikeClicked(dislike));
     }
@@ -360,13 +360,13 @@ public class MainPlayerController implements PlayerEventListener {
     }
 
     @Override
-    public void onVideoSpeedClicked(boolean enabled) {
-        process(listener -> listener.onVideoSpeedClicked(enabled));
+    public void onSpeedClicked(boolean enabled) {
+        process(listener -> listener.onSpeedClicked(enabled));
     }
 
     @Override
-    public void onVideoSpeedLongClicked(boolean enabled) {
-        process(listener -> listener.onVideoSpeedLongClicked(enabled));
+    public void onSpeedLongClicked(boolean enabled) {
+        process(listener -> listener.onSpeedLongClicked(enabled));
     }
 
     @Override
@@ -407,11 +407,6 @@ public class MainPlayerController implements PlayerEventListener {
     @Override
     public void onPipClicked() {
         process(PlayerUiEventListener::onPipClicked);
-    }
-
-    @Override
-    public void onScreenOffClicked() {
-        process(PlayerUiEventListener::onScreenOffClicked);
     }
 
     @Override

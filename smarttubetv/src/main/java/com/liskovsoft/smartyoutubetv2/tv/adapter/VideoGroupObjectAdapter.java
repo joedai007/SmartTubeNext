@@ -3,6 +3,8 @@ package com.liskovsoft.smartyoutubetv2.tv.adapter;
 import androidx.annotation.NonNull;
 import androidx.leanback.widget.ObjectAdapter;
 import androidx.leanback.widget.Presenter;
+import androidx.leanback.widget.PresenterSelector;
+
 import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.VideoGroup;
@@ -13,51 +15,48 @@ import java.util.List;
 
 public class VideoGroupObjectAdapter extends ObjectAdapter {
     private static final String TAG = VideoGroupObjectAdapter.class.getSimpleName();
-    private final List<Video> mVideoItems;
+    private final List<Video> mVideoItems = new ArrayList<Video>() {
+        @Override
+        public boolean addAll(@NonNull Collection<? extends Video> c) {
+            // TODO: remove the hack someday.
+            // Dirty hack for avoiding group duplication.
+            // Duplicated items suddenly appeared in Home, Subscriptions and History.
+
+            // Another alt method.
+            if (size() > 0 && size() < CHECK_MAX_SIZE) {
+                Helpers.removeIf(c, this::contains);
+            }
+
+            return super.addAll(c);
+        }
+    };
     private final List<VideoGroup> mVideoGroups = new ArrayList<>(); // keep groups from being garbage collected
+    private static final int CHECK_MAX_SIZE = 200;
 
     public VideoGroupObjectAdapter(VideoGroup videoGroup, Presenter presenter) {
         super(presenter);
-        mVideoItems = new ArrayList<Video>() {
-            @Override
-            public boolean addAll(@NonNull Collection<? extends Video> c) {
-                // TODO: remove the hack someday.
-                // Dirty hack for avoiding group duplication.
-                // Duplicated items suddenly appeared in Home and Subscriptions.
 
-                //if (size() >= c.size() && c.contains(get(c.size() - 1))) {
-                //    return false;
-                //}
+        initData(videoGroup);
+    }
 
-                // Alt method. Works with Home rows.
-                //if (size() < 30) {
-                //    Video firstItem = Helpers.get(c, 0);
-                //    if (firstItem != null && contains(firstItem)) {
-                //        return false;
-                //    }
-                //}
+    public VideoGroupObjectAdapter(VideoGroup videoGroup, PresenterSelector presenter) {
+        super(presenter);
 
-                // Another alt method.
-                if (size() > 0 && size() < 30) {
-                    Helpers.removeIf(c, this::contains);
-                }
-
-                // Latest alt dubs fix method (not works).
-                //Set<Video> uniqueItems = new LinkedHashSet<>(c);
-
-                //return super.addAll(uniqueItems);
-
-                return super.addAll(c);
-            }
-        };
-
-        if (videoGroup != null) {
-            append(videoGroup);
-        }
+        initData(videoGroup);
     }
 
     public VideoGroupObjectAdapter(Presenter presenter) {
         this(null, presenter);
+    }
+
+    public VideoGroupObjectAdapter(PresenterSelector presenter) {
+        this(null, presenter);
+    }
+
+    private void initData(VideoGroup videoGroup) {
+        if (videoGroup != null) {
+            add(videoGroup);
+        }
     }
 
     @Override
@@ -67,7 +66,7 @@ public class VideoGroupObjectAdapter extends ObjectAdapter {
 
     @Override
     public Object get(int index) {
-        if (index < 0 || index >= size()) {
+        if (index < 0 || index >= mVideoItems.size()) {
             return null;
         }
 
@@ -78,16 +77,44 @@ public class VideoGroupObjectAdapter extends ObjectAdapter {
         return mVideoItems;
     }
 
-    public void append(VideoGroup group) {
-        if (group != null && group.getVideos() != null) {
-            int begin = mVideoItems.size();
+    public void add(VideoGroup group) {
+        if (group == null || group.getVideos() == null) {
+            return;
+        }
 
+        if (group.getAction() == VideoGroup.ACTION_PREPEND) {
+            prepend(group); // add at the begin of the existing group
+        } else {
+            append(group); // add at the end of the the existing group
+        }
+    }
+
+    private void prepend(VideoGroup group) {
+        int begin = mVideoItems.size();
+
+        if (mVideoGroups.contains(group)) {
+            mVideoItems.addAll(0, group.getVideos().subList(begin, group.getVideos().size()));
+        } else {
+            mVideoItems.addAll(0, group.getVideos());
+            mVideoGroups.add(0, group);
+        }
+
+        // Fix double item blinking by specifying exact range
+        notifyItemRangeInserted(0, mVideoItems.size() - begin);
+    }
+
+    private void append(VideoGroup group) {
+        int begin = mVideoItems.size();
+
+        if (mVideoGroups.contains(group)) {
+            mVideoItems.addAll(group.getVideos().subList(begin, group.getVideos().size()));
+        } else {
             mVideoItems.addAll(group.getVideos());
             mVideoGroups.add(group);
-
-            // Fix double item blinking by specifying exact range
-            notifyItemRangeInserted(begin, mVideoItems.size() - begin);
         }
+
+        // Fix double item blinking by specifying exact range
+        notifyItemRangeInserted(begin, mVideoItems.size() - begin);
     }
 
     /**

@@ -1,5 +1,7 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.dialogs;
 
+import android.app.Fragment;
+import android.app.FragmentTransaction;
 import android.content.Context;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -16,10 +18,11 @@ import androidx.preference.PreferenceFragment;
 import androidx.preference.PreferenceScreen;
 import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.sharedutils.mylogger.Log;
+import com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.OptionCategory;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.AppDialogPresenter;
-import com.liskovsoft.smartyoutubetv2.common.app.presenters.AppDialogPresenter.OptionCategory;
 import com.liskovsoft.smartyoutubetv2.common.app.views.AppDialogView;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
+import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.ui.dialogs.other.ChatPreference;
 import com.liskovsoft.smartyoutubetv2.tv.ui.dialogs.other.ChatPreferenceDialogFragment;
 import com.liskovsoft.smartyoutubetv2.tv.ui.dialogs.other.CommentsPreference;
@@ -39,6 +42,9 @@ public class AppDialogFragment extends LeanbackSettingsFragment implements AppDi
     private boolean mIsTransparent;
     private boolean mIsPaused;
     private int mId;
+
+    private static final String PREFERENCE_FRAGMENT_TAG =
+            "androidx.leanback.preference.LeanbackSettingsFragment.PREFERENCE_FRAGMENT";
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -115,6 +121,10 @@ public class AppDialogFragment extends LeanbackSettingsFragment implements AppDi
 
     @Override
     public void show(List<OptionCategory> categories, String title, boolean isExpandable, boolean isTransparent, int id) {
+        if (!Utils.checkActivity(getActivity())) {
+            return;
+        }
+
         // Only root fragment could make other fragments in the stack transparent
         boolean stackIsEmpty = getChildFragmentManager() != null && getChildFragmentManager().getBackStackEntryCount() == 0;
         mIsTransparent = stackIsEmpty ? isTransparent : mIsTransparent;
@@ -124,7 +134,7 @@ public class AppDialogFragment extends LeanbackSettingsFragment implements AppDi
 
         if (isExpandable && categories != null && categories.size() == 1) {
             OptionCategory category = categories.get(0);
-            if (category.items != null) {
+            if (category.options != null) {
                 onPreferenceDisplayDialog(fragment, mManager.createPreference(category));
             }
         } else {
@@ -202,6 +212,28 @@ public class AppDialogFragment extends LeanbackSettingsFragment implements AppDi
         return true;
     }
 
+    /**
+     * Fix possible state loss!!!
+     */
+    @Override
+    public void startPreferenceFragment(@NonNull Fragment fragment) {
+        final FragmentTransaction transaction = getChildFragmentManager().beginTransaction();
+        final Fragment prevFragment =
+                getChildFragmentManager().findFragmentByTag(PREFERENCE_FRAGMENT_TAG);
+        if (prevFragment != null) {
+            transaction
+                    .addToBackStack(null)
+                    .replace(R.id.settings_preference_fragment_container, fragment,
+                            PREFERENCE_FRAGMENT_TAG);
+        } else {
+            transaction
+                    .add(R.id.settings_preference_fragment_container, fragment,
+                            PREFERENCE_FRAGMENT_TAG);
+        }
+        // Fix possible state loss!!!
+        transaction.commitAllowingStateLoss();
+    }
+
     @Override
     public void finish() {
         if (getActivity() != null) {
@@ -216,6 +248,12 @@ public class AppDialogFragment extends LeanbackSettingsFragment implements AppDi
         } else {
             finish();
         }
+    }
+
+    @Override
+    public void clearBackstack() {
+        // this manager holds entire back stack
+        Helpers.setField(this, "mChildFragmentManager", null);
     }
 
     @Override
@@ -288,7 +326,7 @@ public class AppDialogFragment extends LeanbackSettingsFragment implements AppDi
         private void addPreferences(PreferenceScreen screen) {
             if (mCategories != null) {
                 for (OptionCategory category : mCategories) {
-                    if (category.items != null) {
+                    if (category.options != null) {
                         screen.addPreference(mManager.createPreference(category));
                     }
                 }

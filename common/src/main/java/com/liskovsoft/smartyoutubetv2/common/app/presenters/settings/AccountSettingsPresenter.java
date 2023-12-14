@@ -11,9 +11,13 @@ import com.liskovsoft.smartyoutubetv2.common.app.presenters.AppDialogPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.BrowsePresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.SignInPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.base.BasePresenter;
+import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.AccountSelectionPresenter;
+import com.liskovsoft.smartyoutubetv2.common.exoplayer.ExoMediaSourceFactory;
 import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
 import com.liskovsoft.smartyoutubetv2.common.prefs.AccountsData;
+import com.liskovsoft.smartyoutubetv2.common.prefs.AppPrefs;
 import com.liskovsoft.smartyoutubetv2.common.utils.AppDialogUtil;
+import com.liskovsoft.smartyoutubetv2.common.utils.SimpleEditDialog;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,19 +51,18 @@ public class AccountSettingsPresenter extends BasePresenter<Void> {
         mMediaServiceManager.loadAccounts(this::createAndShowDialog);
     }
 
-    public void nextAccountOrDialog() {
-        mMediaServiceManager.loadAccounts(this::nextAccountOrDialog);
-    }
-
     private void createAndShowDialog(List<Account> accounts) {
         AppDialogPresenter settingsPresenter = AppDialogPresenter.instance(getContext());
 
         appendSelectAccountSection(accounts, settingsPresenter);
         appendAddAccountButton(settingsPresenter);
         appendRemoveAccountSection(accounts, settingsPresenter);
+        appendProtectAccountWithPassword(settingsPresenter);
+        appendSeparateSettings(settingsPresenter);
         appendSelectAccountOnBoot(settingsPresenter);
 
-        settingsPresenter.showDialog(getContext().getString(R.string.settings_accounts), this::unhold);
+        Account account = MediaServiceManager.instance().getSelectedAccount();
+        settingsPresenter.showDialog(account != null ? account.getName() : getContext().getString(R.string.settings_accounts), this::unhold);
     }
 
     private void appendSelectAccountSection(List<Account> accounts, AppDialogPresenter settingsPresenter) {
@@ -71,7 +74,7 @@ public class AccountSettingsPresenter extends BasePresenter<Void> {
 
         optionItems.add(UiOptionItem.from(
                 getContext().getString(R.string.dialog_account_none), optionItem -> {
-                    selectAccount(null);
+                    AccountSelectionPresenter.instance(getContext()).selectAccount(null);
                     settingsPresenter.closeDialog();
                 }, true
         ));
@@ -81,7 +84,7 @@ public class AccountSettingsPresenter extends BasePresenter<Void> {
         for (Account account : accounts) {
             optionItems.add(UiOptionItem.from(
                     getFullName(account), option -> {
-                        selectAccount(account);
+                        AccountSelectionPresenter.instance(getContext()).selectAccount(account);
                         settingsPresenter.closeDialog();
                     }, account.isSelected()
             ));
@@ -127,27 +130,23 @@ public class AccountSettingsPresenter extends BasePresenter<Void> {
         }, AccountsData.instance(getContext()).isSelectAccountOnBootEnabled()));
     }
 
-    private void nextAccountOrDialog(List<Account> accounts) {
-        if (accounts == null || accounts.isEmpty()) {
-            createAndShowDialog(accounts);
-            return;
-        }
-
-        Account current = null;
-
-        for (Account account : accounts) {
-            if (account.isSelected()) {
-                current = account;
-                break;
+    private void appendProtectAccountWithPassword(AppDialogPresenter settingsPresenter) {
+        settingsPresenter.appendSingleSwitch(UiOptionItem.from(getContext().getString(R.string.protect_account_with_password), optionItem -> {
+            if (optionItem.isSelected()) {
+                showAddPasswordDialog(settingsPresenter);
+            } else {
+                showRemovePasswordDialog(settingsPresenter);
             }
-        }
+        }, AccountsData.instance(getContext()).getAccountPassword() != null));
+    }
 
-        int index = accounts.indexOf(current);
-
-        int nextIndex = index + 1;
-        // null == 'without account'
-        selectAccount(nextIndex == accounts.size() ? null : accounts.get(nextIndex));
-        //selectAccount(accounts.get(nextIndex == accounts.size() ? 0 : nextIndex));
+    private void appendSeparateSettings(AppDialogPresenter settingsPresenter) {
+        settingsPresenter.appendSingleSwitch(UiOptionItem.from(getContext().getString(R.string.multi_profiles),
+                option -> {
+                    AppPrefs.instance(getContext()).enableMultiProfiles(option.isSelected());
+                    BrowsePresenter.instance(getContext()).updateSections();
+                },
+                AppPrefs.instance(getContext()).isMultiProfilesEnabled()));
     }
 
     private String getFullName(Account account) {
@@ -166,13 +165,71 @@ public class AccountSettingsPresenter extends BasePresenter<Void> {
         return account.getName() != null ? account.getName() : account.getEmail();
     }
 
-    private void selectAccount(Account account) {
-        mMediaServiceManager.getSingInManager().selectAccount(account);
+    private void removeAccount(Account account) {
+        mMediaServiceManager.getSingInService().removeAccount(account);
+        ExoMediaSourceFactory.unhold();
         BrowsePresenter.instance(getContext()).refresh(false);
     }
 
-    private void removeAccount(Account account) {
-        mMediaServiceManager.getSingInManager().removeAccount(account);
-        BrowsePresenter.instance(getContext()).refresh(false);
+    private void showAddPasswordDialog(AppDialogPresenter settingsPresenter) {
+        settingsPresenter.closeDialog();
+        SimpleEditDialog.show(
+                getContext(),
+                "", newValue -> {
+                    AccountsData.instance(getContext()).setAccountPassword(newValue);
+                    BrowsePresenter.instance(getContext()).updateSections();
+                    //onSuccess.run();
+                    return true;
+                },
+                getContext().getString(R.string.enter_account_password),
+                true
+        );
+    }
+
+    private void showRemovePasswordDialog(AppDialogPresenter settingsPresenter) {
+        String password = AccountsData.instance(getContext()).getAccountPassword();
+
+        if (password == null) {
+            return;
+        }
+
+        settingsPresenter.closeDialog();
+        SimpleEditDialog.show(
+                getContext(),
+                "", newValue -> {
+                    if (password.equals(newValue)) {
+                        AccountsData.instance(getContext()).setAccountPassword(null);
+                        BrowsePresenter.instance(getContext()).updateSections();
+                        //onSuccess.run();
+                        return true;
+                    }
+                    return false;
+                },
+                getContext().getString(R.string.enter_account_password),
+                true
+        );
+    }
+
+    public void showCheckPasswordDialog() {
+        String password = AccountsData.instance(getContext()).getAccountPassword();
+
+        if (password == null) {
+            return;
+        }
+
+        SimpleEditDialog.show(
+                getContext(),
+                "", newValue -> {
+                    if (password.equals(newValue)) {
+                        AccountsData.instance(getContext()).setPasswordAccepted(true);
+                        BrowsePresenter.instance(getContext()).updateSections();
+                        //onSuccess.run();
+                        return true;
+                    }
+                    return false;
+                },
+                getContext().getString(R.string.enter_account_password),
+                true
+        );
     }
 }

@@ -31,6 +31,7 @@ import com.google.android.exoplayer2.ControlDispatcher;
 import com.google.android.exoplayer2.DefaultControlDispatcher;
 import com.google.android.exoplayer2.DefaultRenderersFactory;
 import com.google.android.exoplayer2.Player;
+import com.google.android.exoplayer2.SeekParameters;
 import com.google.android.exoplayer2.SimpleExoPlayer;
 import com.google.android.exoplayer2.ext.leanback.LeanbackPlayerAdapter;
 import com.google.android.exoplayer2.ext.mediasession.MediaSessionConnector;
@@ -63,6 +64,7 @@ import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.adapter.VideoGroupObjectAdapter;
 import com.liskovsoft.smartyoutubetv2.tv.presenter.CustomListRowPresenter;
+import com.liskovsoft.smartyoutubetv2.tv.presenter.ShortsCardPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.presenter.VideoCardPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.presenter.base.OnItemLongPressedListener;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.LeanbackActivity;
@@ -97,6 +99,7 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     private ArrayObjectAdapter mRowsAdapter;
     private ListRowPresenter mRowPresenter;
     private VideoCardPresenter mCardPresenter;
+    private ShortsCardPresenter mShortsPresenter;
     private Map<Integer, VideoGroupObjectAdapter> mMediaGroupAdapters;
     private PlayerEventListener mEventListener;
     private PlayerController mExoPlayerController;
@@ -223,15 +226,19 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     }
 
     public void onDispatchTouchEvent(MotionEvent event) {
-        if (event.getAction() == MotionEvent.ACTION_DOWN) {
-            tickle(); // show Player UI
-        }
+        applyTickle(event);
     }
 
     public void onDispatchGenericMotionEvent(MotionEvent event) {
+        applyTickle(event);
+    }
+
+    private void applyTickle(MotionEvent event) {
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
             tickle(); // show Player UI
         }
+
+        mEventListener.onKeyDown(-1); // reset ui timer
     }
 
     public void onFinish() {
@@ -252,7 +259,10 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     }
 
     public void onPIPChanged(boolean isInPIP) {
-        // NOP
+        if (!isInPIP) {
+            // Fix partially disappeared buttons after exit from PIP???
+            notifyPlaybackRowChanged();
+        }
     }
 
     public void skipToNext() {
@@ -417,7 +427,13 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         //mPlayer.setForegroundMode(true);
         // NOTE: Avoid using seekParameters. ContentBlock hangs because of constant skipping to the segment start.
         // ContentBlock hangs on the last segment: https://www.youtube.com/watch?v=pYymRbfjKv8
-        //mPlayer.setSeekParameters(SeekParameters.CLOSEST_SYNC); // live stream (dash) seeking fix
+
+        // Fix seeking on TextureView (some devices only)
+        if (PlayerTweaksData.instance(getContext()).isTextureViewEnabled()) {
+            // Also, live stream (dash) seeking fix
+            mPlayer.setSeekParameters(SeekParameters.CLOSEST_SYNC);
+        }
+
         mExoPlayerController.setPlayer(mPlayer);
     }
 
@@ -527,15 +543,15 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
                 // Fix exoplayer pause after activity is resumed (AFR switching).
                 // It's tied to activity state transitioning because window has different mode.
                 // NOTE: may be a problems with background playback or bluetooth button events
-                //if (System.currentTimeMillis() - mResumeTimeMs < 5_000 ||
-                //        (!isResumed() && !isInPIPMode() && !AppDialogPresenter.instance(getContext()).isDialogShown())
-                //) {
-                //    return false;
-                //}
-
-                if (System.currentTimeMillis() - mResumeTimeMs < 5_000) {
+                if (System.currentTimeMillis() - mResumeTimeMs < 5_000 ||
+                        (!isResumed() && !isInPIPMode() && !AppDialogPresenter.instance(getContext()).isDialogShown())
+                ) {
                     return false;
                 }
+
+                //if (System.currentTimeMillis() - mResumeTimeMs < 5_000) {
+                //    return false;
+                //}
 
                 return super.dispatchSetPlayWhenReady(player, playWhenReady);
             }
@@ -581,12 +597,14 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         };
 
         mCardPresenter = new VideoCardPresenter();
+        mShortsPresenter = new ShortsCardPresenter();
     }
 
     private void setupEventListeners() {
         setOnItemViewClickedListener(new ItemViewClickedListener());
         setOnItemViewSelectedListener(new ItemViewSelectedListener());
         mCardPresenter.setOnItemViewLongPressedListener(new ItemViewLongPressedListener());
+        mShortsPresenter.setOnItemViewLongPressedListener(new ItemViewLongPressedListener());
     }
 
     private final class ItemViewLongPressedListener implements OnItemLongPressedListener {
@@ -673,11 +691,6 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         }
 
         @Override
-        public void onSubscribe(boolean subscribed) {
-            mEventListener.onSubscribeClicked(subscribed);
-        }
-
-        @Override
         public void onThumbsDown(boolean thumbsDown) {
             mEventListener.onDislikeClicked(thumbsDown);
         }
@@ -714,12 +727,12 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
         @Override
         public void onVideoSpeed(boolean enabled) {
-            mEventListener.onVideoSpeedClicked(enabled);
+            mEventListener.onSpeedClicked(enabled);
         }
 
         @Override
         public void onVideoSpeedLongPress(boolean enabled) {
-            mEventListener.onVideoSpeedLongClicked(enabled);
+            mEventListener.onSpeedLongClicked(enabled);
         }
 
         @Override
@@ -760,11 +773,6 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         @Override
         public void onPip() {
             mEventListener.onPipClicked();
-        }
-
-        @Override
-        public void onScreenOff() {
-            mEventListener.onScreenOffClicked();
         }
 
         @Override
@@ -869,14 +877,18 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
     @Override
     public void updateEndingTime() {
-        EndingTimeView endingTime = getActivity().findViewById(R.id.global_ending_time);
-        endingTime.update();
+        if (getActivity() != null) {
+            EndingTimeView endingTime = getActivity().findViewById(R.id.global_ending_time);
+            endingTime.update();
+        }
     }
 
     @Override
     public void setChatReceiver(ChatReceiver chatReceiver) {
-        LiveChatView liveChat = getActivity().findViewById(R.id.live_chat);
-        liveChat.setChatReceiver(chatReceiver);
+        if (getActivity() != null) {
+            LiveChatView liveChat = getActivity().findViewById(R.id.live_chat);
+            liveChat.setChatReceiver(chatReceiver);
+        }
     }
 
     // End Ui events
@@ -885,30 +897,27 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
     @Override
     public void openDash(InputStream dashManifest) {
-        //resetPlayerState();
-
         mExoPlayerController.openDash(dashManifest);
     }
 
     @Override
     public void openDashUrl(String dashManifestUrl) {
-        //resetPlayerState();
-
         mExoPlayerController.openDashUrl(dashManifestUrl);
     }
 
     @Override
     public void openHlsUrl(String hlsPlaylistUrl) {
-        //resetPlayerState();
-
         mExoPlayerController.openHlsUrl(hlsPlaylistUrl);
     }
 
     @Override
     public void openUrlList(List<String> urlList) {
-        //resetPlayerState();
-
         mExoPlayerController.openUrlList(urlList);
+    }
+
+    @Override
+    public void openMerged(InputStream dashManifest, String hlsPlaylistUrl) {
+        mExoPlayerController.openMerged(dashManifest, hlsPlaylistUrl);
     }
 
     @Override
@@ -1253,13 +1262,6 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     }
 
     @Override
-    public void setSubscribeButtonState(boolean subscribe) {
-        if (mPlayerGlue != null) {
-            mPlayerGlue.setSubscribeActionState(subscribe);
-        }
-    }
-
-    @Override
     public void setPlaylistAddButtonState(boolean selected) {
         if (mPlayerGlue != null) {
             mPlayerGlue.setPlaylistAddButtonState(selected);
@@ -1290,7 +1292,7 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     @Override
     public void setButtonState(int buttonId, int buttonState) {
         if (mPlayerGlue != null) {
-            mPlayerGlue.setActionIndex(buttonId, buttonState);
+            mPlayerGlue.setButtonState(buttonId, buttonState);
         }
     }
 
@@ -1359,7 +1361,7 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         VideoGroupObjectAdapter existingAdapter = mMediaGroupAdapters.get(mediaGroupId);
 
         if (existingAdapter == null) {
-            VideoGroupObjectAdapter mediaGroupAdapter = new VideoGroupObjectAdapter(group, mCardPresenter);
+            VideoGroupObjectAdapter mediaGroupAdapter = new VideoGroupObjectAdapter(group, group.isShorts() ? mShortsPresenter : mCardPresenter);
 
             mMediaGroupAdapters.put(mediaGroupId, mediaGroupAdapter);
 
@@ -1374,7 +1376,7 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         } else {
             freeze(true);
 
-            existingAdapter.append(group); // continue row
+            existingAdapter.add(group); // continue
 
             freeze(false);
         }

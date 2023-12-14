@@ -48,6 +48,7 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
         appendVideoPresetsCategory(settingsPresenter);
         appendVideoBufferCategory(settingsPresenter);
         appendVideoZoomCategory(settingsPresenter);
+        appendVideoSpeedCategory(settingsPresenter);
         appendAudioLanguageCategory(settingsPresenter);
         appendAudioShiftCategory(settingsPresenter);
         appendMasterVolumeCategory(settingsPresenter);
@@ -57,10 +58,11 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
         appendSeekTypeCategory(settingsPresenter);
         appendSeekingPreviewCategory(settingsPresenter);
         AppDialogUtil.appendSeekIntervalDialogItems(getContext(), settingsPresenter, mPlayerData, false);
-        appendRememberSpeedCategory(settingsPresenter);
+        //appendRememberSpeedCategory(settingsPresenter);
         appendScreenOffTimeoutCategory(settingsPresenter);
         appendEndingTimeCategory(settingsPresenter);
         appendPixelRatioCategory(settingsPresenter);
+        appendNetworkEngineCategory(settingsPresenter);
         appendMiscCategory(settingsPresenter);
         appendTweaksCategory(settingsPresenter);
 
@@ -114,27 +116,27 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
 
     private void appendVideoBufferCategory(AppDialogPresenter settingsPresenter) {
         OptionCategory category = AppDialogUtil.createVideoBufferCategory(getContext(), mPlayerData);
-        settingsPresenter.appendRadioCategory(category.title, category.options);
+        settingsPresenter.appendCategory(category);
     }
 
     private void appendVideoPresetsCategory(AppDialogPresenter settingsPresenter) {
         OptionCategory category = AppDialogUtil.createVideoPresetsCategory(getContext());
-        settingsPresenter.appendRadioCategory(category.title, category.options);
+        settingsPresenter.appendCategory(category);
     }
 
     private void appendVideoZoomCategory(AppDialogPresenter settingsPresenter) {
         OptionCategory category = AppDialogUtil.createVideoZoomCategory(getContext(), mPlayerData);
-        settingsPresenter.appendRadioCategory(category.title, category.options);
+        settingsPresenter.appendCategory(category);
     }
 
     private void appendAudioLanguageCategory(AppDialogPresenter settingsPresenter) {
         OptionCategory category = AppDialogUtil.createAudioLanguageCategory(getContext(), mPlayerData);
-        settingsPresenter.appendRadioCategory(category.title, category.options);
+        settingsPresenter.appendCategory(category);
     }
 
     private void appendAudioShiftCategory(AppDialogPresenter settingsPresenter) {
         OptionCategory category = AppDialogUtil.createAudioShiftCategory(getContext(), mPlayerData);
-        settingsPresenter.appendRadioCategory(category.title, category.options);
+        settingsPresenter.appendCategory(category);
     }
 
     private void appendMasterVolumeCategory(AppDialogPresenter settingsPresenter) {
@@ -153,7 +155,7 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
                     Helpers.floatEquals(scale, mPlayerData.getPlayerVolume())));
         }
 
-        settingsPresenter.appendRadioCategory(getContext().getString(R.string.volume_limit), options);
+        settingsPresenter.appendRadioCategory(getContext().getString(R.string.player_volume), options);
     }
 
     private void appendSeekingPreviewCategory(AppDialogPresenter settingsPresenter) {
@@ -173,28 +175,23 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
     }
 
     private void appendRememberSpeedCategory(AppDialogPresenter settingsPresenter) {
-        List<OptionItem> options = new ArrayList<>();
+        OptionCategory category = AppDialogUtil.createRememberSpeedCategory(getContext(), mPlayerData);
 
-        options.add(UiOptionItem.from(getContext().getString(R.string.player_remember_speed_none),
-                optionItem -> {
-                    mPlayerData.enableRememberSpeed(false);
-                    mPlayerData.enableRememberSpeedEach(false);
-                },
-                !mPlayerData.isRememberSpeedEnabled() && !mPlayerData.isRememberSpeedEachEnabled()));
+        settingsPresenter.appendRadioCategory(category.title, category.options);
+    }
 
-        options.add(UiOptionItem.from(getContext().getString(R.string.player_remember_speed_all),
-                optionItem -> mPlayerData.enableRememberSpeed(true),
-                mPlayerData.isRememberSpeedEnabled()));
-
-        options.add(UiOptionItem.from(getContext().getString(R.string.player_remember_speed_each),
-                optionItem -> mPlayerData.enableRememberSpeedEach(true),
-                mPlayerData.isRememberSpeedEachEnabled()));
-
-        settingsPresenter.appendRadioCategory(getContext().getString(R.string.player_remember_speed), options);
+    private void appendVideoSpeedCategory(AppDialogPresenter settingsPresenter) {
+        settingsPresenter.appendSingleButton(UiOptionItem.from(getContext().getString(R.string.video_speed), optionItem -> {
+            AppDialogPresenter settingsPresenter2 = AppDialogPresenter.instance(getContext());
+            settingsPresenter2.appendCategory(AppDialogUtil.createSpeedListCategory(getContext(), null, mPlayerData));
+            settingsPresenter2.appendCategory(AppDialogUtil.createRememberSpeedCategory(getContext(), mPlayerData));
+            settingsPresenter2.appendCategory(AppDialogUtil.createSpeedMiscCategory(getContext(), mPlayerTweaksData));
+            settingsPresenter2.showDialog(getContext().getString(R.string.video_speed));
+        }));
     }
 
     private void appendScreenOffTimeoutCategory(AppDialogPresenter settingsPresenter) {
-        OptionCategory category = AppDialogUtil.createPlayerScreenOffTimeoutCategory(getContext(), mPlayerTweaksData);
+        OptionCategory category = AppDialogUtil.createPlayerScreenOffTimeoutCategory(getContext(), mPlayerTweaksData, null);
 
         settingsPresenter.appendRadioCategory(category.title, category.options);
     }
@@ -203,7 +200,6 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
         List<OptionItem> options = new ArrayList<>();
 
         for (int[] pair : new int[][] {
-                {R.string.player_screen_off_timeout, PlayerTweaksData.PLAYER_BUTTON_SCREEN_OFF_TIMEOUT},
                 {R.string.video_rotate, PlayerTweaksData.PLAYER_BUTTON_VIDEO_ROTATE},
                 {R.string.open_chat, PlayerTweaksData.PLAYER_BUTTON_CHAT},
                 {R.string.content_block_provider, PlayerTweaksData.PLAYER_BUTTON_CONTENT_BLOCK},
@@ -212,7 +208,8 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
                 {R.string.action_video_info, PlayerTweaksData.PLAYER_BUTTON_VIDEO_INFO},
                 {R.string.action_video_stats, PlayerTweaksData.PLAYER_BUTTON_VIDEO_STATS},
                 {R.string.action_playback_queue, PlayerTweaksData.PLAYER_BUTTON_PLAYBACK_QUEUE},
-                {R.string.action_screen_off, PlayerTweaksData.PLAYER_BUTTON_SCREEN_OFF},
+                //{R.string.action_screen_off, PlayerTweaksData.PLAYER_BUTTON_SCREEN_OFF},
+                {R.string.player_screen_off_timeout, PlayerTweaksData.PLAYER_BUTTON_SCREEN_OFF_TIMEOUT},
                 {R.string.action_video_zoom, PlayerTweaksData.PLAYER_BUTTON_VIDEO_ZOOM},
                 {R.string.action_channel, PlayerTweaksData.PLAYER_BUTTON_OPEN_CHANNEL},
                 {R.string.action_search, PlayerTweaksData.PLAYER_BUTTON_SEARCH},
@@ -244,24 +241,6 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
     private void appendTweaksCategory(AppDialogPresenter settingsPresenter) {
         List<OptionItem> options = new ArrayList<>();
 
-        options.add(UiOptionItem.from(getContext().getString(R.string.network_stack, "Cronet"),
-                getContext().getString(R.string.cronet_desc),
-                option -> {
-                    mPlayerTweaksData.setPlayerDataSource(option.isSelected() ? PlayerTweaksData.PLAYER_DATA_SOURCE_CRONET :
-                            PlayerTweaksData.PLAYER_DATA_SOURCE_DEFAULT);
-                    ExoMediaSourceFactory.unhold();
-                },
-                mPlayerTweaksData.getPlayerDataSource() == PlayerTweaksData.PLAYER_DATA_SOURCE_CRONET));
-
-        options.add(UiOptionItem.from(getContext().getString(R.string.network_stack, "OkHttp"),
-                getContext().getString(R.string.okhttp_desc),
-                option -> {
-                    mPlayerTweaksData.setPlayerDataSource(option.isSelected() ? PlayerTweaksData.PLAYER_DATA_SOURCE_OKHTTP :
-                            PlayerTweaksData.PLAYER_DATA_SOURCE_DEFAULT);
-                    ExoMediaSourceFactory.unhold();
-                },
-                mPlayerTweaksData.getPlayerDataSource() == PlayerTweaksData.PLAYER_DATA_SOURCE_OKHTTP));
-
         // Disable long press on buggy controllers.
         options.add(UiOptionItem.from(getContext().getString(R.string.disable_ok_long_press),
                 getContext().getString(R.string.disable_ok_long_press_desc),
@@ -283,6 +262,14 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
                     }
                 },
                 mPlayerTweaksData.isTextureViewEnabled()));
+
+        options.add(UiOptionItem.from(getContext().getString(R.string.unlock_high_bitrate_formats),
+                option -> mPlayerTweaksData.unlockHighBitrateFormats(option.isSelected()),
+                mPlayerTweaksData.isHighBitrateFormatsUnlocked()));
+
+        options.add(UiOptionItem.from(getContext().getString(R.string.unlock_high_bitrate_audio_formats),
+                option -> mPlayerTweaksData.enableUnsafeAudioFormats(option.isSelected()),
+                mPlayerTweaksData.isUnsafeAudioFormatsEnabled()));
 
         options.add(UiOptionItem.from(getContext().getString(R.string.force_legacy_codecs),
                 getContext().getString(R.string.force_legacy_codecs_desc),
@@ -321,6 +308,7 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
                 mPlayerTweaksData.isNoFpsPresetsEnabled()));
 
         options.add(UiOptionItem.from(getContext().getString(R.string.prefer_avc_over_vp9),
+                getContext().getString(R.string.prefer_avc_over_vp9_desc),
                 option -> mPlayerTweaksData.preferAvcOverVp9(option.isSelected()),
                 mPlayerTweaksData.isAvcOverVp9Preferred()));
 
@@ -384,16 +372,6 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
                     mRestartApp = true;
                 },
                 !mGeneralData.isSettingsSectionEnabled()));
-
-        //options.add(UiOptionItem.from(getContext().getString(R.string.alt_app_icon),
-        //        option -> {
-        //            mGeneralData.enableAltAppIcon(option.isSelected());
-        //            Helpers.enableActivity(getContext(), option.isSelected() ?
-        //                    "com.liskovsoft.smartyoutubetv2.tv.ui.main.SplashActivity" : "com.liskovsoft.smartyoutubetv2.tv.ui.main.SplashActivityAlt", false);
-        //            Helpers.enableActivity(getContext(), option.isSelected() ?
-        //                    "com.liskovsoft.smartyoutubetv2.tv.ui.main.SplashActivityAlt" : "com.liskovsoft.smartyoutubetv2.tv.ui.main.SplashActivity", true);
-        //        },
-        //        mGeneralData.isAltAppIconEnabled()));
 
         // Disabled inside RetrofitHelper
         //options.add(UiOptionItem.from("Prefer IPv4 DNS",
@@ -510,8 +488,50 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
         settingsPresenter.appendRadioCategory(getContext().getString(R.string.action_repeat_mode), options);
     }
 
+    private void appendNetworkEngineCategory(AppDialogPresenter settingsPresenter) {
+        List<OptionItem> options = new ArrayList<>();
+
+        options.add(UiOptionItem.from(getContext().getString(R.string.default_lang),
+                getContext().getString(R.string.default_stack_desc),
+                option -> {
+                    mPlayerTweaksData.setPlayerDataSource(PlayerTweaksData.PLAYER_DATA_SOURCE_DEFAULT);
+                    ExoMediaSourceFactory.unhold();
+                },
+                mPlayerTweaksData.getPlayerDataSource() == PlayerTweaksData.PLAYER_DATA_SOURCE_DEFAULT));
+
+        options.add(UiOptionItem.from("Cronet",
+                getContext().getString(R.string.cronet_desc),
+                option -> {
+                    mPlayerTweaksData.setPlayerDataSource(PlayerTweaksData.PLAYER_DATA_SOURCE_CRONET);
+                    ExoMediaSourceFactory.unhold();
+                },
+                mPlayerTweaksData.getPlayerDataSource() == PlayerTweaksData.PLAYER_DATA_SOURCE_CRONET));
+
+        options.add(UiOptionItem.from("OkHttp",
+                getContext().getString(R.string.okhttp_desc),
+                option -> {
+                    mPlayerTweaksData.setPlayerDataSource(PlayerTweaksData.PLAYER_DATA_SOURCE_OKHTTP);
+                    ExoMediaSourceFactory.unhold();
+                },
+                mPlayerTweaksData.getPlayerDataSource() == PlayerTweaksData.PLAYER_DATA_SOURCE_OKHTTP));
+
+        settingsPresenter.appendRadioCategory(getContext().getString(R.string.player_network_stack), options);
+    }
+
     private void appendMiscCategory(AppDialogPresenter settingsPresenter) {
         List<OptionItem> options = new ArrayList<>();
+
+        options.add(UiOptionItem.from(getContext().getString(R.string.player_global_focus),
+                option -> mPlayerTweaksData.enablePlayerGlobalFocus(option.isSelected()),
+                mPlayerTweaksData.isPlayerGlobalFocusEnabled()));
+
+        options.add(UiOptionItem.from(getContext().getString(R.string.player_auto_volume),
+                option -> mPlayerTweaksData.enablePlayerAutoVolume(option.isSelected()),
+                mPlayerTweaksData.isPlayerAutoVolumeEnabled()));
+
+        options.add(UiOptionItem.from(getContext().getString(R.string.player_ui_on_next),
+                option -> mPlayerTweaksData.enablePlayerUiOnNext(option.isSelected()),
+                mPlayerTweaksData.isPlayerUiOnNextEnabled()));
 
         options.add(UiOptionItem.from(getContext().getString(R.string.player_chapter_notification),
                 option -> mPlayerTweaksData.enableChapterNotification(option.isSelected()),
@@ -529,9 +549,9 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
                 option -> mPlayerTweaksData.enableSectionPlaylist(option.isSelected()),
                 mPlayerTweaksData.isSectionPlaylistEnabled()));
 
-        options.add(UiOptionItem.from(getContext().getString(R.string.player_long_speed_list),
-                option -> mPlayerTweaksData.enableLongSpeedList(option.isSelected()),
-                mPlayerTweaksData.isLongSpeedListEnabled()));
+        //options.add(UiOptionItem.from(getContext().getString(R.string.player_long_speed_list),
+        //        option -> mPlayerTweaksData.enableLongSpeedList(option.isSelected()),
+        //        mPlayerTweaksData.isLongSpeedListEnabled()));
 
         options.add(UiOptionItem.from(getContext().getString(R.string.player_button_long_click),
                 option -> mPlayerTweaksData.enableButtonLongClick(option.isSelected()),
@@ -578,11 +598,18 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
                 option -> mPlayerTweaksData.enableQualityInfoBitrate(option.isSelected()),
                 mPlayerTweaksData.isQualityInfoBitrateEnabled()));
 
-        options.add(UiOptionItem.from(getContext().getString(R.string.player_show_global_clock),
+        options.add(UiOptionItem.from(getContext().getString(R.string.app_corner_clock),
+                option -> {
+                    mGeneralData.enableGlobalClock(option.isSelected());
+                    mRestartApp = true;
+                },
+                mGeneralData.isGlobalClockEnabled()));
+
+        options.add(UiOptionItem.from(getContext().getString(R.string.player_corner_clock),
                 option -> mPlayerData.enableGlobalClock(option.isSelected()),
                 mPlayerData.isGlobalClockEnabled()));
 
-        options.add(UiOptionItem.from(getContext().getString(R.string.player_show_global_ending_time),
+        options.add(UiOptionItem.from(getContext().getString(R.string.player_corner_ending_time),
                 option -> mPlayerData.enableGlobalEndingTime(option.isSelected()),
                 mPlayerData.isGlobalEndingTimeEnabled()));
 
@@ -593,18 +620,6 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
         options.add(UiOptionItem.from(getContext().getString(R.string.player_speed_button_old_behavior),
                 option -> mPlayerTweaksData.enableSpeedButtonOldBehavior(option.isSelected()),
                 mPlayerTweaksData.isSpeedButtonOldBehaviorEnabled()));
-
-        //OptionItem remainingTime = UiOptionItem.from(getContext().getString(R.string.player_show_remaining_time),
-        //        option -> mPlayerData.enableRemainingTime(option.isSelected()), mPlayerData.isRemainingTimeEnabled());
-        //
-        //OptionItem endingTime = UiOptionItem.from(getContext().getString(R.string.player_show_ending_time),
-        //        option -> mPlayerData.enableEndingTime(option.isSelected()), mPlayerData.isEndingTimeEnabled());
-        //
-        //remainingTime.setRadio(endingTime);
-        //endingTime.setRadio(remainingTime);
-        //
-        //options.add(remainingTime);
-        //options.add(endingTime);
 
         settingsPresenter.appendCheckedCategory(getContext().getString(R.string.player_other), options);
     }

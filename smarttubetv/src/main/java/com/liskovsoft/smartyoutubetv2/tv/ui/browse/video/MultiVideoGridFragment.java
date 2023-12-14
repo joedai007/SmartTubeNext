@@ -4,6 +4,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Toast;
 import androidx.annotation.Nullable;
+import androidx.leanback.widget.ClassPresenterSelector;
 import androidx.leanback.widget.OnItemViewClickedListener;
 import androidx.leanback.widget.OnItemViewSelectedListener;
 import androidx.leanback.widget.Presenter;
@@ -18,13 +19,15 @@ import com.liskovsoft.smartyoutubetv2.common.app.presenters.interfaces.VideoGrou
 import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
 import com.liskovsoft.smartyoutubetv2.common.misc.TickleManager;
 import com.liskovsoft.smartyoutubetv2.tv.R;
+import com.liskovsoft.smartyoutubetv2.tv.adapter.HeaderVideoGroupObjectAdapter;
 import com.liskovsoft.smartyoutubetv2.tv.adapter.VideoGroupObjectAdapter;
+import com.liskovsoft.smartyoutubetv2.tv.presenter.SearchFieldPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.presenter.VideoCardPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.presenter.ChannelCardPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.presenter.CustomVerticalGridPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.presenter.base.LongClickPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.presenter.base.OnItemLongPressedListener;
-import com.liskovsoft.smartyoutubetv2.tv.ui.browse.interfaces.VideoCategoryFragment;
+import com.liskovsoft.smartyoutubetv2.tv.ui.browse.interfaces.VideoSection;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.LeanbackActivity;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.UriBackgroundManager;
 import com.liskovsoft.smartyoutubetv2.tv.ui.mod.fragments.MultiGridFragment;
@@ -33,9 +36,9 @@ import com.liskovsoft.smartyoutubetv2.tv.util.ViewUtil;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MultiVideoGridFragment extends MultiGridFragment implements VideoCategoryFragment {
+public class MultiVideoGridFragment extends MultiGridFragment implements VideoSection {
     private static final String TAG = MultiVideoGridFragment.class.getSimpleName();
-    private VideoGroupObjectAdapter mGridAdapter1;
+    private HeaderVideoGroupObjectAdapter mGridAdapter1;
     private VideoGroupObjectAdapter mGridAdapter2;
     private final List<VideoGroup> mPendingUpdates1 = new ArrayList<>();
     private final List<VideoGroup> mPendingUpdates2 = new ArrayList<>();
@@ -93,6 +96,11 @@ public class MultiVideoGridFragment extends MultiGridFragment implements VideoCa
         } else {
             mSelectedItemIndex1 = index;
         }
+    }
+
+    @Override
+    public void selectItem(Video item) {
+        // NOP
     }
 
     @Override
@@ -177,7 +185,11 @@ public class MultiVideoGridFragment extends MultiGridFragment implements VideoCa
         setGridPresenter2(presenter2);
 
         if (mGridAdapter1 == null) {
-            mGridAdapter1 = new VideoGroupObjectAdapter(mCardPresenter1);
+            ClassPresenterSelector presenterSelector = new ClassPresenterSelector();
+            presenterSelector.addClassPresenter(Video.class, mCardPresenter1);
+            presenterSelector.addClassPresenter(SearchFieldPresenter.Data.class, new SearchFieldPresenter());
+
+            mGridAdapter1 = new HeaderVideoGroupObjectAdapter(presenterSelector);
             setAdapter1(mGridAdapter1);
         }
 
@@ -213,7 +225,7 @@ public class MultiVideoGridFragment extends MultiGridFragment implements VideoCa
 
         freeze1(true);
 
-        mGridAdapter1.append(group);
+        mGridAdapter1.add(group);
 
         freeze1(false);
 
@@ -244,7 +256,7 @@ public class MultiVideoGridFragment extends MultiGridFragment implements VideoCa
 
         freeze2(true);
 
-        mGridAdapter2.append(group);
+        mGridAdapter2.add(group);
 
         freeze2(false);
 
@@ -265,22 +277,27 @@ public class MultiVideoGridFragment extends MultiGridFragment implements VideoCa
         }
     }
 
-    private void clear1() {
-        if (mGridAdapter1 != null) {
-            mGridAdapter1.clear();
-        }
-    }
-
     @Override
     public void clear() {
         clear1();
         clear2();
     }
 
+    private void clear1() {
+        if (mGridAdapter1 != null) {
+            mGridAdapter1.clear();
+            //addSearchHeader();
+        }
+    }
+
     private void clear2() {
         if (mGridAdapter2 != null) {
             mGridAdapter2.clear();
         }
+    }
+
+    private void addSearchHeader() {
+        mGridAdapter1.setHeader(new SearchFieldPresenter.Data());
     }
 
     @Override

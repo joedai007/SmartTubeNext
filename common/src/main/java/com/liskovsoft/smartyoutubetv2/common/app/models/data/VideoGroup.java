@@ -12,11 +12,21 @@ import java.util.Collections;
 import java.util.List;
 
 public class VideoGroup {
+    /**
+     * Add at the end of the the existing group
+     */
     public static final int ACTION_APPEND = 0;
+    /**
+     * Clear whole fragment and then add this group
+     */
     public static final int ACTION_REPLACE = 1;
     public static final int ACTION_REMOVE = 2;
     public static final int ACTION_REMOVE_AUTHOR = 3;
     public static final int ACTION_SYNC = 4;
+    /**
+     * Add at the begin of the existing group
+     */
+    public static final int ACTION_PREPEND = 5;
     private static final String TAG = VideoGroup.class.getSimpleName();
     private int mId;
     private String mTitle;
@@ -31,7 +41,7 @@ public class VideoGroup {
     }
 
     public static VideoGroup from(MediaGroup mediaGroup) {
-        return from(mediaGroup, null);
+        return from(mediaGroup, (BrowseSection) null);
     }
 
     public static VideoGroup from(BrowseSection category, int groupPosition) {
@@ -77,14 +87,16 @@ public class VideoGroup {
             return videoGroup;
         }
 
-        // Weak point. Title is used to obtain the group id.
-        if (mediaGroup.getTitle() == null && section != null) {
-            mediaGroup.setTitle(section.getTitle());
+        String sectionTitle = null;
+
+        // Set the title for the current section playlist
+        if (section != null) {
+            sectionTitle = section.getTitle();
         }
 
         videoGroup.mMediaGroup = mediaGroup;
-        videoGroup.mTitle = mediaGroup.getTitle();
-        videoGroup.mId = mediaGroup.getId();
+        videoGroup.mTitle = mediaGroup.getTitle() != null ? mediaGroup.getTitle() : sectionTitle;
+        videoGroup.mId = videoGroup.hashCode();
         videoGroup.mVideos = new ArrayList<>();
 
         if (mediaGroup.getMediaItems() == null) {
@@ -114,6 +126,42 @@ public class VideoGroup {
         return videoGroup;
     }
 
+    public static VideoGroup from(VideoGroup baseGroup, MediaGroup mediaGroup) {
+        baseGroup.mMediaGroup = mediaGroup;
+
+        if (mediaGroup == null) {
+            return baseGroup;
+        }
+
+        if (mediaGroup.isEmpty()) {
+            Log.e(TAG, "MediaGroup doesn't contain media items. Title: " + mediaGroup.getTitle());
+            return baseGroup;
+        }
+
+        VideoStateService stateService = VideoStateService.instance(null);
+
+        for (MediaItem item : mediaGroup.getMediaItems()) {
+            Video video = Video.from(item);
+
+            if (video.isEmpty()) {
+                continue;
+            }
+
+            // Group position in multi-grid fragments
+            video.groupPosition = baseGroup.mPosition;
+            video.setGroup(baseGroup);
+            if (stateService != null && video.percentWatched == -1) {
+                State state = stateService.getByVideoId(video.videoId);
+                video.sync(state);
+            }
+            baseGroup.mVideos.add(video);
+        }
+
+        baseGroup.mAction = ACTION_APPEND;
+
+        return baseGroup;
+    }
+
     public static VideoGroup fromChapters(List<ChapterItem> chapters, String title) {
         VideoGroup videoGroup = new VideoGroup();
         videoGroup.mTitle = title;
@@ -141,11 +189,6 @@ public class VideoGroup {
      */
     public void setTitle(String title) {
         mTitle = title;
-
-        // Important part. The title is converted to unique row id.
-        if (mMediaGroup != null) {
-            mMediaGroup.setTitle(title);
-        }
     }
 
     public int getId() {
@@ -168,6 +211,14 @@ public class VideoGroup {
         return mVideos == null || mVideos.isEmpty();
     }
 
+    public boolean isShorts() {
+        if (isEmpty()) {
+            return false;
+        }
+
+        return mVideos.get(mVideos.size() - 1).isShorts;
+    }
+
     /**
      * Group position in multi-grid fragments<br/>
      * It isn't used on other types of fragments.
@@ -176,12 +227,20 @@ public class VideoGroup {
         return mPosition;
     }
 
+    public void setPosition(int position) {
+        mPosition = position;
+    }
+
     public int getAction() {
         return mAction;
     }
 
     public void setAction(int action) {
         mAction = action;
+
+        if (action == ACTION_PREPEND) {
+            mPosition = 0;
+        }
     }
 
     /**

@@ -15,6 +15,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.presenters.interfaces.Presenter
 import com.liskovsoft.smartyoutubetv2.common.app.views.BrowseView;
 import com.liskovsoft.smartyoutubetv2.common.app.views.ChannelUploadsView;
 import com.liskovsoft.smartyoutubetv2.common.app.views.ChannelView;
+import com.liskovsoft.smartyoutubetv2.common.app.views.PlaybackView;
 import com.liskovsoft.smartyoutubetv2.common.app.views.SearchView;
 import com.liskovsoft.smartyoutubetv2.common.app.views.SplashView;
 import com.liskovsoft.smartyoutubetv2.common.app.views.ViewManager;
@@ -97,7 +98,7 @@ public abstract class BasePresenter<T> implements Presenter<T> {
     @Override
     public void onViewInitialized() {
         enableSync();
-        showBootDialogs();
+        //showBootDialogs();
     }
 
     @Override
@@ -122,14 +123,14 @@ public abstract class BasePresenter<T> implements Presenter<T> {
             }
         }
 
-        showBootDialogs();
+        //showBootDialogs();
     }
 
     @Override
     public void onFinish() {
         if (SearchData.instance(getContext()).getTempBackgroundModeClass() == this.getClass() &&
             PlaybackPresenter.instance(getContext()).isRunningInBackground()) {
-            ViewManager.instance(getContext()).startView(SplashView.class);
+            ViewManager.instance(getContext()).startView(PlaybackView.class);
         }
 
         onDone();
@@ -216,19 +217,19 @@ public abstract class BasePresenter<T> implements Presenter<T> {
         }
     }
 
-    private void showBootDialogs() {
-        if (this instanceof BrowsePresenter) {
-            long currentTimeMs = System.currentTimeMillis();
-
-            if (currentTimeMs - mUpdateCheckMs > 60 * 60 * 1_000) {
-                BootDialogPresenter updatePresenter = BootDialogPresenter.instance(getContext());
-                updatePresenter.start();
-                updatePresenter.unhold();
-                Utils.updateRemoteControlService(getContext());
-                mUpdateCheckMs = currentTimeMs;
-            }
-        }
-    }
+    //private void showBootDialogs() {
+    //    if (this instanceof BrowsePresenter) {
+    //        long currentTimeMs = System.currentTimeMillis();
+    //
+    //        if (currentTimeMs - mUpdateCheckMs > 60 * 60 * 1_000) {
+    //            BootDialogPresenter updatePresenter = BootDialogPresenter.instance(getContext());
+    //            updatePresenter.start();
+    //            updatePresenter.unhold();
+    //            Utils.updateRemoteControlService(getContext());
+    //            mUpdateCheckMs = currentTimeMs;
+    //        }
+    //    }
+    //}
 
     /**
      * Need to be the first line and executed on earliest stage once.<br/>

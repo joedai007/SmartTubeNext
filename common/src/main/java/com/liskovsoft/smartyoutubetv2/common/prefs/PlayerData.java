@@ -4,15 +4,18 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.os.Build;
 import android.os.Build.VERSION;
+import androidx.annotation.NonNull;
 import com.google.android.exoplayer2.text.CaptionStyleCompat;
 import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.sharedutils.locale.LocaleUtility;
 import com.liskovsoft.smartyoutubetv2.common.R;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.manager.PlayerEngine;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.manager.PlayerUI;
-import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.FormatItem;
 import com.liskovsoft.smartyoutubetv2.common.exoplayer.other.SubtitleManager.SubtitleStyle;
 import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.ExoFormatItem;
+import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.FormatItem;
+import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.track.MediaTrack;
+import com.liskovsoft.smartyoutubetv2.common.prefs.AppPrefs.ProfileChangeListener;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -22,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class PlayerData extends DataChangeBase {
+public class PlayerData extends DataChangeBase implements ProfileChangeListener {
     private static final String VIDEO_PLAYER_DATA = "video_player_data";
     public static final int ONLY_UI = 0;
     public static final int UI_AND_PAUSE = 1;
@@ -64,12 +67,12 @@ public class PlayerData extends DataChangeBase {
     private int mAudioDelayMs;
     private String mAudioLanguage;
     private String mSubtitleLanguage;
-    private boolean mIsRememberSpeedEnabled;
+    private boolean mIsAllSpeedEnabled;
     private boolean mIsLegacyCodecsForced;
     private int mRepeatMode;
     private boolean mIsSonyTimerFixEnabled;
     private boolean mIsQualityInfoEnabled;
-    private boolean mIsRememberSpeedEachEnabled;
+    private boolean mIsSpeedPerVideoEnabled;
     private boolean mIsTimeCorrectionEnabled;
     private boolean mIsGlobalEndingTimeEnabled;
     private boolean mIsEndingTimeEnabled;
@@ -84,11 +87,42 @@ public class PlayerData extends DataChangeBase {
     private boolean mIsSkip24RateEnabled;
     private boolean mIsLiveChatEnabled;
     private FormatItem mLastSubtitleFormat;
-    private final Set<String> mEnabledSubtitlesForChannel = new LinkedHashSet<>();
-    private boolean mEnableSubtitlesForChannel;
+    private final Set<String> mEnabledSubtitlesPerChannel = new LinkedHashSet<>();
+    private boolean mIsSubtitlesPerChannelEnabled;
+    private boolean mIsSpeedPerChannelEnabled;
+    private final Map<String, SpeedItem> mSpeeds = new HashMap<>();
+
+    private static class SpeedItem {
+        private static final String OBJ_DELIM = "&vi;";
+
+        public String channelId;
+        public float speed;
+
+        public SpeedItem(String channelId, float speed) {
+            this.channelId = channelId;
+            this.speed = speed;
+        }
+
+        public static SpeedItem fromString(String specs) {
+            String[] split = Helpers.split(OBJ_DELIM, specs);
+
+            if (split == null || split.length != 2) {
+                return new SpeedItem(null, 1);
+            }
+
+            return new SpeedItem(Helpers.parseStr(split[0]), Helpers.parseFloat(split[1]));
+        }
+
+        @NonNull
+        @Override
+        public String toString() {
+            return Helpers.merge(OBJ_DELIM, channelId, speed);
+        }
+    }
 
     private PlayerData(Context context) {
         mPrefs = AppPrefs.instance(context);
+        mPrefs.addListener(this);
         initSubtitleStyles();
         initDefaultFormats();
         restoreState();
@@ -228,23 +262,25 @@ public class PlayerData extends DataChangeBase {
         return mRepeatMode;
     }
 
-    public boolean isRememberSpeedEnabled() {
-        return mIsRememberSpeedEnabled;
+    public boolean isAllSpeedEnabled() {
+        return mIsAllSpeedEnabled;
     }
 
-    public void enableRememberSpeed(boolean enable) {
-        mIsRememberSpeedEnabled = enable;
-        mIsRememberSpeedEachEnabled = false;
+    public void enableAllSpeed(boolean enable) {
+        mIsAllSpeedEnabled = enable;
+        mIsSpeedPerVideoEnabled = false;
+        mIsSpeedPerChannelEnabled = false;
         persistState();
     }
 
-    public boolean isRememberSpeedEachEnabled() {
-        return mIsRememberSpeedEachEnabled;
+    public boolean isSpeedPerVideoEnabled() {
+        return mIsSpeedPerVideoEnabled;
     }
 
-    public void enableRememberSpeedEach(boolean enable) {
-        mIsRememberSpeedEachEnabled = enable;
-        mIsRememberSpeedEnabled = false;
+    public void enableSpeedPerVideo(boolean enable) {
+        mIsSpeedPerVideoEnabled = enable;
+        mIsAllSpeedEnabled = false;
+        mIsSpeedPerChannelEnabled = false;
         persistState();
     }
 
@@ -335,6 +371,11 @@ public class PlayerData extends DataChangeBase {
                 break;
         }
 
+        MediaTrack track = ExoFormatItem.toMediaTrack(format);
+        if (track != null) {
+            track.isSaved = true;
+        }
+
         return FormatItem.checkFormat(format, type);
     }
 
@@ -371,27 +412,27 @@ public class PlayerData extends DataChangeBase {
         }
     }
 
-    public void enableSubtitlesForChannel(String channelId) {
-        mEnabledSubtitlesForChannel.add(channelId);
+    public void enableSubtitlesPerChannel(String channelId) {
+        mEnabledSubtitlesPerChannel.add(channelId);
         persistState();
     }
 
-    public void disableSubtitlesForChannel(String channelId) {
-        mEnabledSubtitlesForChannel.remove(channelId);
+    public void disableSubtitlesPerChannel(String channelId) {
+        mEnabledSubtitlesPerChannel.remove(channelId);
         persistState();
     }
 
-    public boolean isSubtitlesForChannelEnabled(String channelId) {
-        return mEnabledSubtitlesForChannel.contains(channelId);
+    public boolean isSubtitlesPerChannelEnabled(String channelId) {
+        return mEnabledSubtitlesPerChannel.contains(channelId);
     }
 
-    public void enableSubtitlesForChannel(boolean enable) {
-        mEnableSubtitlesForChannel = enable;
+    public void enableSubtitlesPerChannel(boolean enable) {
+        mIsSubtitlesPerChannelEnabled = enable;
         persistState();
     }
 
-    public boolean isSubtitlesForChannelEnabled() {
-        return mEnableSubtitlesForChannel;
+    public boolean isSubtitlesPerChannelEnabled() {
+        return mIsSubtitlesPerChannelEnabled;
     }
 
     public void setVideoBufferType(int type) {
@@ -480,16 +521,42 @@ public class PlayerData extends DataChangeBase {
     }
 
     public void setSpeed(float speed) {
-        if (mSpeed == speed) {
+        setSpeed(null, speed);
+    }
+
+    public void setSpeed(String channelId, float speed) {
+        if (mSpeed == speed && channelId == null) {
             return;
         }
 
+        if (isSpeedPerChannelEnabled() && channelId != null) {
+            if (Helpers.floatEquals(speed, 1.0f)) {
+                mSpeeds.remove(channelId);
+            } else {
+                mSpeeds.put(channelId, new SpeedItem(channelId, speed));
+            }
+        }
         setLastSpeed(speed);
         mSpeed = speed;
         persistState();
     }
 
     public float getSpeed() {
+        return getSpeed(null);
+    }
+
+    public float getSpeed(String channelId) {
+        SpeedItem speed = null;
+
+        if (isSpeedPerChannelEnabled() && channelId != null) {
+            speed = mSpeeds.get(channelId);
+            mSpeed = 1.0f; // reset speed if the channel not found
+        }
+
+        if (speed != null) {
+            mSpeed = speed.speed;
+        }
+
         return mSpeed;
     }
 
@@ -503,6 +570,17 @@ public class PlayerData extends DataChangeBase {
 
     public float getLastSpeed() {
         return mLastSpeed;
+    }
+
+    public void enableSpeedPerChannel(boolean enable) {
+        mIsSpeedPerChannelEnabled = enable;
+        mIsSpeedPerVideoEnabled = false;
+        mIsAllSpeedEnabled = false;
+        persistState();
+    }
+
+    public boolean isSpeedPerChannelEnabled() {
+        return mIsSpeedPerChannelEnabled;
     }
 
     public int getAudioDelayMs() {
@@ -581,6 +659,8 @@ public class PlayerData extends DataChangeBase {
         if (formatItem == null) {
             if (VERSION.SDK_INT <= 19) { // Android 4 playback crash fix (memory leak?)
                 formatItem = FormatItem.VIDEO_SD_AVC_30;
+            } else if (VERSION.SDK_INT <= 23 && Helpers.isVP9ResolutionSupported(1080)) {
+                formatItem = FormatItem.VIDEO_FHD_VP9_60;
             } else if (Helpers.isVP9ResolutionSupported(2160)) {
                 formatItem = FormatItem.VIDEO_4K_VP9_60;
             } else if (Helpers.isVP9ResolutionSupported(1080)) {
@@ -624,7 +704,7 @@ public class PlayerData extends DataChangeBase {
     }
 
     private void restoreState() {
-        String data = mPrefs.getData(VIDEO_PLAYER_DATA);
+        String data = mPrefs.getProfileData(VIDEO_PLAYER_DATA);
 
         String[] split = Helpers.splitObjectLegacy(data);
 
@@ -641,7 +721,7 @@ public class PlayerData extends DataChangeBase {
         mAudioFormat = Helpers.firstNonNull(ExoFormatItem.from(Helpers.parseStr(split, 10)), getDefaultAudioFormat());
         mSubtitleFormat = Helpers.firstNonNull(ExoFormatItem.from(Helpers.parseStr(split, 11)), FormatItem.SUBTITLE_NONE);
         mVideoBufferType = Helpers.parseInt(split, 12, PlayerEngine.BUFFER_LOW);
-        mSubtitleStyleIndex = Helpers.parseInt(split, 13, 1);
+        mSubtitleStyleIndex = Helpers.parseInt(split, 13, 4); // yellow on semi bg
         mVideoZoomMode = Helpers.parseInt(split, 14, PlayerEngine.ZOOM_MODE_DEFAULT);
         mSpeed = Helpers.parseFloat(split, 15, 1.0f);
         mIsAfrEnabled = Helpers.parseBoolean(split, 16, false);
@@ -649,14 +729,14 @@ public class PlayerData extends DataChangeBase {
         mIsAfrResSwitchEnabled = Helpers.parseBoolean(split, 18, false);
         // old afr delay sec was there
         mAudioDelayMs = Helpers.parseInt(split, 20, 0);
-        mIsRememberSpeedEnabled = Helpers.parseBoolean(split, 21, false);
+        mIsAllSpeedEnabled = Helpers.parseBoolean(split, 21, false);
         // repeat mode was here
         // didn't remember what was there
         mIsLegacyCodecsForced = Helpers.parseBoolean(split, 24, false);
         mIsSonyTimerFixEnabled = Helpers.parseBoolean(split, 25, false);
         // old player tweaks
         mIsQualityInfoEnabled = Helpers.parseBoolean(split, 28, true);
-        mIsRememberSpeedEachEnabled = Helpers.parseBoolean(split, 29, false);
+        mIsSpeedPerVideoEnabled = Helpers.parseBoolean(split, 29, false);
         mVideoAspectRatio = Helpers.parseFloat(split, 30, PlayerEngine.ASPECT_RATIO_DEFAULT);
         mIsGlobalClockEnabled = Helpers.parseBoolean(split, 31, false);
         mIsTimeCorrectionEnabled = Helpers.parseBoolean(split, 32, true);
@@ -682,42 +762,60 @@ public class PlayerData extends DataChangeBase {
         mAudioLanguage = Helpers.parseStr(split, 52, LocaleUtility.getCurrentLanguage(mPrefs.getContext()));
         mSubtitleLanguage = Helpers.parseStr(split, 53, LocaleUtility.getCurrentLanguage(mPrefs.getContext()));
         String enabledSubtitles = Helpers.parseStr(split, 54);
-        mEnableSubtitlesForChannel = Helpers.parseBoolean(split, 55, false);
+        mIsSubtitlesPerChannelEnabled = Helpers.parseBoolean(split, 55, true);
+        mIsSpeedPerChannelEnabled = Helpers.parseBoolean(split, 56, true);
+        String[] speeds = Helpers.parseArray(split, 57);
+
+        if (speeds != null) {
+            for (String speedSpec : speeds) {
+                SpeedItem item = SpeedItem.fromString(speedSpec);
+                mSpeeds.put(item.channelId, item);
+            }
+        }
 
         if (enabledSubtitles != null) {
             String[] channelsArr = Helpers.splitArray(enabledSubtitles);
 
-            mEnabledSubtitlesForChannel.clear();
+            mEnabledSubtitlesPerChannel.clear();
 
-            mEnabledSubtitlesForChannel.addAll(Arrays.asList(channelsArr));
+            mEnabledSubtitlesPerChannel.addAll(Arrays.asList(channelsArr));
         } else {
-            mEnabledSubtitlesForChannel.clear();
+            mEnabledSubtitlesPerChannel.clear();
         }
 
-        if (!mIsRememberSpeedEnabled) {
+        if (!mIsAllSpeedEnabled) {
             mSpeed = 1.0f;
         }
     }
 
     @Override
     protected void persistState() {
-        String enabledSubtitles = Helpers.mergeArray(mEnabledSubtitlesForChannel.toArray());
+        String enabledSubtitles = Helpers.mergeArray(mEnabledSubtitlesPerChannel.toArray());
 
-        mPrefs.setData(VIDEO_PLAYER_DATA, Helpers.mergeObject(mOKButtonBehavior, mUIHideTimeoutSec, mIsAbsoluteDateEnabled,
+        mPrefs.setProfileData(VIDEO_PLAYER_DATA, Helpers.mergeObject(mOKButtonBehavior, mUIHideTimeoutSec, mIsAbsoluteDateEnabled,
                 mSeekPreviewMode, mIsSeekConfirmPauseEnabled,
                 mIsClockEnabled, mIsRemainingTimeEnabled, mBackgroundMode, null, // afrData was there
                 Helpers.toString(mVideoFormat), Helpers.toString(mAudioFormat), Helpers.toString(mSubtitleFormat),
                 mVideoBufferType, mSubtitleStyleIndex, mVideoZoomMode, mSpeed,
-                mIsAfrEnabled, mIsAfrFpsCorrectionEnabled, mIsAfrResSwitchEnabled, null, mAudioDelayMs,
-                mIsRememberSpeedEnabled, null, null, // didn't remember what was there
+                mIsAfrEnabled, mIsAfrFpsCorrectionEnabled, mIsAfrResSwitchEnabled, null, mAudioDelayMs, mIsAllSpeedEnabled, null, null, // didn't remember what was there
                 mIsLegacyCodecsForced, mIsSonyTimerFixEnabled, null, null, // old player tweaks
-                mIsQualityInfoEnabled, mIsRememberSpeedEachEnabled, mVideoAspectRatio, mIsGlobalClockEnabled, mIsTimeCorrectionEnabled,
+                mIsQualityInfoEnabled, mIsSpeedPerVideoEnabled, mVideoAspectRatio, mIsGlobalClockEnabled, mIsTimeCorrectionEnabled,
                 mIsGlobalEndingTimeEnabled, mIsEndingTimeEnabled, mIsDoubleRefreshRateEnabled, mIsSeekConfirmPlayEnabled,
                 mStartSeekIncrementMs, null, mSubtitleScale, mPlayerVolume, mIsTooltipsEnabled, mSubtitlePosition, mIsNumberKeySeekEnabled,
                 mIsSkip24RateEnabled, mAfrPauseMs, mIsLiveChatEnabled, Helpers.toString(mLastSubtitleFormat), mLastSpeed, mVideoRotation,
-                mVideoZoom, mRepeatMode, mAudioLanguage, mSubtitleLanguage, enabledSubtitles, mEnableSubtitlesForChannel
+                mVideoZoom, mRepeatMode, mAudioLanguage, mSubtitleLanguage, enabledSubtitles, mIsSubtitlesPerChannelEnabled,
+                mIsSpeedPerChannelEnabled, Helpers.mergeArray(mSpeeds.values().toArray())
         ));
 
         super.persistState();
+    }
+
+    @Override
+    public void onProfileChanged() {
+        // reset on profile change
+        mSpeeds.clear();
+        mEnabledSubtitlesPerChannel.clear();
+
+        restoreState();
     }
 }

@@ -40,7 +40,6 @@ import com.liskovsoft.sharedutils.helpers.KeyHelpers;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.SearchPresenter;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
 import com.liskovsoft.smartyoutubetv2.tv.BuildConfig;
-import net.gotev.speech.Speech;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -226,6 +225,7 @@ public class SearchSupportFragment extends Fragment {
     private Drawable mBadgeDrawable;
     private ExternalQuery mExternalQuery;
     private boolean mIsKeyboardAutoShowEnabled;
+    private boolean mIsKeyboardFixEnabled;
 
     private SpeechRecognizer mSpeechRecognizer;
 
@@ -345,7 +345,7 @@ public class SearchSupportFragment extends Fragment {
             }
 
             if (mIsKeyboardAutoShowEnabled && focused) {
-                Helpers.showKeyboard(v.getContext());
+                Helpers.showKeyboardAlt(v.getContext(), v);
             }
         });
         mSearchTextEditor.addTextChangedListener(new TextWatcher() {
@@ -364,7 +364,9 @@ public class SearchSupportFragment extends Fragment {
                 Utils.enableScreensaver(getActivity(), true);
             }
         });
-        KeyHelpers.fixEnterKey(mSearchTextEditor);
+        if (mIsKeyboardFixEnabled) {
+            KeyHelpers.fixEnterKey(mSearchTextEditor);
+        }
         // BUGFIX: focus lost with keyboard???
         //mSearchTextEditor.setOnKeyboardDismissListener(this::focusOnSearchField);
 
@@ -798,6 +800,10 @@ public class SearchSupportFragment extends Fragment {
         mIsKeyboardAutoShowEnabled = enable;
     }
 
+    protected void enableKeyboardFix(boolean enable) {
+        mIsKeyboardFixEnabled = enable;
+    }
+
     protected void showListening() {
         if (mSpeechOrbView != null) {
             mSpeechOrbView.showListening();
@@ -921,12 +927,8 @@ public class SearchSupportFragment extends Fragment {
         mSearchBar.setSearchQuery(query);
     }
 
-    private void stopSpeechService() {
-        try {
-            Speech.getInstance().stopListening();
-        } catch (IllegalArgumentException | NoSuchMethodError e) { // Speech service not registered/Android 4 (no such method)
-            e.printStackTrace();
-        }
+    protected void stopSpeechService() {
+        // NOP
     }
 
     static class ExternalQuery {

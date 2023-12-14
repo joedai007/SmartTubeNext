@@ -1,7 +1,9 @@
 package com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers;
 
+import android.annotation.SuppressLint;
+
 import com.liskovsoft.mediaserviceinterfaces.MediaItemService;
-import com.liskovsoft.mediaserviceinterfaces.MediaService;
+import com.liskovsoft.mediaserviceinterfaces.HubService;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItemFormatInfo;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItemMetadata;
 import com.liskovsoft.sharedutils.helpers.MessageHelpers;
@@ -13,10 +15,12 @@ import com.liskovsoft.smartyoutubetv2.common.app.models.data.SampleMediaItem;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.VideoGroup;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.PlayerEventListenerHelper;
-import com.liskovsoft.smartyoutubetv2.common.app.models.playback.manager.PlayerUI;
-import com.liskovsoft.smartyoutubetv2.common.app.models.playback.listener.PlayerEventListener;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.SuggestionsController.MetadataListener;
+import com.liskovsoft.smartyoutubetv2.common.app.models.playback.listener.PlayerEventListener;
+import com.liskovsoft.smartyoutubetv2.common.app.models.playback.manager.PlayerUI;
+import com.liskovsoft.smartyoutubetv2.common.app.presenters.AppDialogPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.VideoActionPresenter;
+import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.FormatItem;
 import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
 import com.liskovsoft.smartyoutubetv2.common.prefs.DataChangeBase.OnDataChange;
 import com.liskovsoft.smartyoutubetv2.common.prefs.GeneralData;
@@ -25,18 +29,16 @@ import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerTweaksData;
 import com.liskovsoft.smartyoutubetv2.common.utils.AppDialogUtil;
 import com.liskovsoft.smartyoutubetv2.common.utils.UniqueRandom;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
-import com.liskovsoft.youtubeapi.service.YouTubeMediaService;
+import com.liskovsoft.youtubeapi.service.YouTubeHubService;
 import io.reactivex.disposables.Disposable;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class VideoLoaderController extends PlayerEventListenerHelper implements MetadataListener, OnDataChange {
     private static final String TAG = VideoLoaderController.class.getSimpleName();
     private final Playlist mPlaylist;
-    private final SuggestionsController mSuggestionsLoader;
+    private final SuggestionsController mSuggestionsController;
     private final UniqueRandom mRandom;
     private Video mLastVideo;
     private int mLastError = -1;
@@ -46,34 +48,32 @@ public class VideoLoaderController extends PlayerEventListenerHelper implements 
     private long mSleepTimerStartMs;
     private Disposable mFormatInfoAction;
     private Disposable mMpdStreamAction;
-    private final Map<Integer, Runnable> mErrorActions = new HashMap<>();
     private final Runnable mReloadVideoHandler = () -> loadVideo(mLastVideo);
-    private final Runnable mPendingNext = () -> {
+    private final Runnable mMetadataSync = () -> {
         if (getPlayer() != null) {
-            openVideoFromNext(getPlayer().getVideo(), false);
+            waitMetadataSync(getPlayer().getVideo(), false);
         }
     };
-    private final Runnable mPendingRestartEngine = () -> {
+    private final Runnable mFixAndRestartEngine = () -> {
         if (getPlayer() != null) {
-            YouTubeMediaService.instance().invalidateCache();
+            YouTubeHubService.instance().invalidateCache();
             getPlayer().restartEngine(); // properly save position of the current track
         }
     };
     private final Runnable mLoadRandomNext = this::loadRandomNext;
 
-    public VideoLoaderController(SuggestionsController suggestionsLoader) {
-        mSuggestionsLoader = suggestionsLoader;
+    public VideoLoaderController(SuggestionsController suggestionsController) {
+        mSuggestionsController = suggestionsController;
         mPlaylist = Playlist.instance();
         mRandom = new UniqueRandom();
     }
 
     @Override
     public void onInit() {
-        mPlayerData = PlayerData.instance(getActivity());
+        mPlayerData = PlayerData.instance(getContext());
         mPlayerData.setOnChange(this);
-        mPlayerTweaksData = PlayerTweaksData.instance(getActivity());
+        mPlayerTweaksData = PlayerTweaksData.instance(getContext());
         mSleepTimerStartMs = System.currentTimeMillis();
-        initErrorActions();
     }
 
     @Override
@@ -113,12 +113,12 @@ public class VideoLoaderController extends PlayerEventListenerHelper implements 
     }
 
     @Override
-    public void onEngineError(int error) {
+    public void onEngineError(int error, int rendererIndex, String message) {
         Log.e(TAG, "Player error occurred: %s. Trying to fix…", error);
 
         mLastError = error;
 
-        startErrorAction(error);
+        runErrorAction(error, rendererIndex, message);
     }
 
     @Override
@@ -136,7 +136,7 @@ public class VideoLoaderController extends PlayerEventListenerHelper implements 
 
     @Override
     public boolean onNextClicked() {
-        if (GeneralData.instance(getActivity()).isChildModeEnabled()) {
+        if (GeneralData.instance(getContext()).isChildModeEnabled()) {
             onPlayEnd();
         } else {
             loadNext();
@@ -153,23 +153,26 @@ public class VideoLoaderController extends PlayerEventListenerHelper implements 
     public void loadPrevious() {
         Video previous = mPlaylist.getPrevious();
 
-        if (previous != null) {
+        if (mSuggestionsController.getPrevious() != null) {
+            openVideoInt(mSuggestionsController.getPrevious());
+        } else if (previous != null) {
             previous.fromQueue = true;
             openVideoInt(previous);
         }
     }
 
     public void loadNext() {
-        Video next = mPlaylist.getNext();
+        Video next = mSuggestionsController.getNext();
         mLastVideo = null; // in case next video is the same as previous
 
         if (next != null) {
-            next.fromQueue = true;
             openVideoInt(next);
-        } else if (mSuggestionsLoader.getNext() != null) {
-            openVideoInt(mSuggestionsLoader.getNext());
         } else {
-            openVideoFromNext(getPlayer().getVideo(), true);
+            waitMetadataSync(getPlayer().getVideo(), true);
+        }
+
+        if (mPlayerTweaksData.isPlayerUiOnNextEnabled()) {
+            getPlayer().showOverlay(true);
         }
     }
 
@@ -180,6 +183,8 @@ public class VideoLoaderController extends PlayerEventListenerHelper implements 
         Video video = getPlayer().getVideo();
         if (video != null && video.finishOnEnded) {
             repeatMode = PlayerUI.REPEAT_MODE_CLOSE;
+        } else if (video != null && video.isShorts) {
+            repeatMode = PlayerUI.REPEAT_MODE_ONE;
         }
 
         applyRepeatMode(repeatMode);
@@ -194,7 +199,7 @@ public class VideoLoaderController extends PlayerEventListenerHelper implements 
 
     @Override
     public void onPlaybackQueueClicked() {
-        AppDialogUtil.showPlaybackQueueDialog(getActivity(), this::openVideoInt);
+        AppDialogUtil.showPlaybackQueueDialog(getContext(), this::openVideoInt);
     }
 
     @Override
@@ -205,6 +210,8 @@ public class VideoLoaderController extends PlayerEventListenerHelper implements 
         if (mPlayerData.isSonyTimerFixEnabled()) {
             getPlayer().setVideo(mLastVideo);
         }
+
+        Utils.removeCallbacks(mFixAndRestartEngine);
 
         return false;
     }
@@ -217,7 +224,7 @@ public class VideoLoaderController extends PlayerEventListenerHelper implements 
     private void checkSleepTimer() {
         if (mPlayerData.isSonyTimerFixEnabled() && System.currentTimeMillis() - mSleepTimerStartMs > 60 * 60 * 1_000) {
             getPlayer().setPlayWhenReady(false);
-            getPlayer().setTitle(getActivity().getString(R.string.sleep_timer));
+            getPlayer().setTitle(getContext().getString(R.string.sleep_timer));
             getPlayer().showOverlay(true);
         }
     }
@@ -241,27 +248,26 @@ public class VideoLoaderController extends PlayerEventListenerHelper implements 
         if (item != null) {
             mPlaylist.setCurrent(item);
             getPlayer().setVideo(item);
-            mSuggestionsLoader.loadSuggestions(item);
+            mSuggestionsController.loadSuggestions(item);
         }
     }
 
-    private void openVideoFromNext(Video current, boolean showLoadingMsg) {
+    private void waitMetadataSync(Video current, boolean showLoadingMsg) {
         if (current == null) {
             return;
         }
 
-        // Significantly improves next video loading time!
         if (current.nextMediaItem != null) {
             openVideoInt(Video.from(current.nextMediaItem));
         } else if (!current.isSynced) { // Maybe there's nothing left. E.g. when casting from phone
             // Wait in a loop while suggestions have been loaded...
             if (showLoadingMsg) {
-                MessageHelpers.showMessageThrottled(getActivity(), R.string.wait_data_loading);
+                MessageHelpers.showMessageThrottled(getContext(), R.string.wait_data_loading);
             }
             // Short videos next fix (suggestions aren't loaded yet)
             boolean isEnded = getPlayer() != null && Math.abs(getPlayer().getDurationMs() - getPlayer().getPositionMs()) < 100;
             if (isEnded) {
-                Utils.postDelayed(mPendingNext, 1_000);
+                Utils.postDelayed(mMetadataSync, 1_000);
             }
         }
     }
@@ -269,7 +275,7 @@ public class VideoLoaderController extends PlayerEventListenerHelper implements 
     private void loadFormatInfo(Video video) {
         disposeActions();
 
-        MediaService service = YouTubeMediaService.instance();
+        HubService service = YouTubeHubService.instance();
         MediaItemService mediaItemManager = service.getMediaItemService();
         mFormatInfoAction = mediaItemManager.getFormatInfoObserve(video.videoId)
                 .subscribe(this::processFormatInfo,
@@ -288,7 +294,7 @@ public class VideoLoaderController extends PlayerEventListenerHelper implements 
         if (formatInfo.isUnplayable()) {
             getPlayer().setTitle(formatInfo.getPlayabilityStatus());
             getPlayer().showOverlay(true);
-            mSuggestionsLoader.loadSuggestions(mLastVideo);
+            mSuggestionsController.loadSuggestions(mLastVideo);
             bgImageUrl = mLastVideo.getBackgroundUrl();
             loadNext();
         } else if (formatInfo.containsDashVideoInfo() && acceptDashVideoInfo(formatInfo)) {
@@ -296,7 +302,13 @@ public class VideoLoaderController extends PlayerEventListenerHelper implements 
 
             mMpdStreamAction = formatInfo.createMpdStreamObservable()
                     .subscribe(
-                            dashManifest -> getPlayer().openDash(dashManifest),
+                            dashManifest -> {
+                                if (mPlayerTweaksData.isHighBitrateFormatsUnlocked() && formatInfo.hasExtendedHlsFormats()) {
+                                    getPlayer().openMerged(dashManifest, formatInfo.getHlsManifestUrl());
+                                } else {
+                                    getPlayer().openDash(dashManifest);
+                                }
+                            },
                             error -> Log.e(TAG, "createMpdStream error: %s", error.getMessage())
                     );
         } else if (formatInfo.isLive() && formatInfo.containsDashUrl() && acceptDashUrl(formatInfo)) {
@@ -311,7 +323,7 @@ public class VideoLoaderController extends PlayerEventListenerHelper implements 
         } else {
             Log.d(TAG, "Empty format info received. Seems future live translation. No video data to pass to the player.");
             scheduleReloadVideoTimer(30 * 1_000);
-            mSuggestionsLoader.loadSuggestions(mLastVideo);
+            mSuggestionsController.loadSuggestions(mLastVideo);
             bgImageUrl = mLastVideo.getBackgroundUrl();
         }
 
@@ -353,7 +365,7 @@ public class VideoLoaderController extends PlayerEventListenerHelper implements 
             getMainController().openVideo(item);
             //getPlayer().showOverlay(true);
         } else {
-            VideoActionPresenter.instance(getActivity()).apply(item);
+            VideoActionPresenter.instance(getContext()).apply(item);
         }
     }
 
@@ -364,33 +376,75 @@ public class VideoLoaderController extends PlayerEventListenerHelper implements 
     private void disposeActions() {
         MediaServiceManager.instance().disposeActions();
         RxHelper.disposeActions(mFormatInfoAction, mMpdStreamAction);
-        Utils.removeCallbacks(mReloadVideoHandler, mPendingRestartEngine, mPendingNext);
+        Utils.removeCallbacks(mReloadVideoHandler, mFixAndRestartEngine, mMetadataSync);
     }
 
-    private void initErrorActions() {
-        // Some ciphered data could be outdated.
-        // Might happen when the app wasn't used quite a long time.
-        mErrorActions.put(PlayerEventListener.ERROR_TYPE_SOURCE, () -> MessageHelpers.showMessage(getActivity(), R.string.msg_player_error_source2));
-        mErrorActions.put(PlayerEventListener.ERROR_TYPE_RENDERER, () -> MessageHelpers.showMessage(getActivity(), R.string.msg_player_error_renderer));
-
-        // Hide unknown error on stable build only
-        //mErrorMap.put(PlayerEventListener.ERROR_TYPE_UNEXPECTED, BuildConfig.FLAVOR.equals("ststable") ? -1 : R.string.msg_player_error_unexpected);
-
-        // Hide unknown error on all devices
-        mErrorActions.put(PlayerEventListener.ERROR_TYPE_UNEXPECTED, () -> {});
-    }
-
-    private void startErrorAction(int error) {
-        Runnable action = mErrorActions.get(error);
-
-        if (action != null) {
-            action.run();
-        } else {
-            MessageHelpers.showMessage(getActivity(), getActivity().getString(R.string.msg_player_error, error));
+    @SuppressLint("StringFormatMatches")
+    private void runErrorAction(int error, int rendererIndex, String message) {
+        switch (error) {
+            // Some ciphered data could be outdated.
+            // Might happen when the app wasn't used quite a long time.
+            case PlayerEventListener.ERROR_TYPE_SOURCE:
+                MessageHelpers.showLongMessage(getContext(), getContext().getString(getSourceErrorResId(rendererIndex)) + "\n" + message);
+                break;
+            case PlayerEventListener.ERROR_TYPE_RENDERER:
+                MessageHelpers.showLongMessage(getContext(), getContext().getString(getRendererErrorResId(rendererIndex)) + "\n" + message);
+                applyRendererErrorAction(rendererIndex);
+                break;
+            // Hide unknown error on all devices
+            case PlayerEventListener.ERROR_TYPE_UNEXPECTED:
+                // NOP
+                break;
+            default:
+                MessageHelpers.showLongMessage(getContext(), getContext().getString(R.string.msg_player_error, error) + "\n" + message);
+                break;
         }
 
         // Delay to fix frequent requests
-        Utils.postDelayed(mPendingRestartEngine, 3_000);
+        Utils.postDelayed(mFixAndRestartEngine, 3_000);
+    }
+
+    private void applyRendererErrorAction(int rendererIndex) {
+        switch (rendererIndex) {
+            case PlayerEventListener.RENDERER_INDEX_VIDEO:
+                FormatItem videoFormat = mPlayerData.getFormat(FormatItem.TYPE_VIDEO);
+                if (!videoFormat.isPreset()) {
+                    mPlayerData.setFormat(mPlayerData.getDefaultVideoFormat());
+                }
+                break;
+            case PlayerEventListener.RENDERER_INDEX_AUDIO:
+                mPlayerData.setFormat(mPlayerData.getDefaultAudioFormat());
+                break;
+            case PlayerEventListener.RENDERER_INDEX_SUBTITLE:
+                mPlayerData.setFormat(FormatItem.SUBTITLE_NONE);
+                break;
+        }
+    }
+
+    private int getSourceErrorResId(int rendererIndex) {
+        switch (rendererIndex) {
+            case PlayerEventListener.RENDERER_INDEX_VIDEO:
+                return R.string.msg_player_error_video_source;
+            case PlayerEventListener.RENDERER_INDEX_AUDIO:
+                return R.string.msg_player_error_audio_source;
+            case PlayerEventListener.RENDERER_INDEX_SUBTITLE:
+                return R.string.msg_player_error_subtitle_source;
+            default:
+                return R.string.msg_player_unknown_error;
+        }
+    }
+
+    private int getRendererErrorResId(int rendererIndex) {
+        switch (rendererIndex) {
+            case PlayerEventListener.RENDERER_INDEX_VIDEO:
+                return R.string.msg_player_error_video_renderer;
+            case PlayerEventListener.RENDERER_INDEX_AUDIO:
+                return R.string.msg_player_error_audio_renderer;
+            case PlayerEventListener.RENDERER_INDEX_SUBTITLE:
+                return R.string.msg_player_error_subtitle_renderer;
+            default:
+                return R.string.msg_player_unknown_error;
+        }
     }
 
     private List<String> applyFix(List<String> urlList) {
@@ -414,15 +468,14 @@ public class VideoLoaderController extends PlayerEventListenerHelper implements 
                 loadNext();
                 break;
             case PlayerUI.REPEAT_MODE_ONE:
-                getPlayer().setPositionMs(0);
+                getPlayer().setPositionMs(100); // fix frozen image on Android 4?
                 break;
             case PlayerUI.REPEAT_MODE_CLOSE:
                 // Close player if suggestions not shown
                 // Except when playing from queue
                 if (mPlaylist.getNext() != null) {
                     loadNext();
-                    getPlayer().showOverlay(true);
-                } else if (!getPlayer().isSuggestionsShown()) {
+                } else if (!getPlayer().isSuggestionsShown() && !AppDialogPresenter.instance(getContext()).isDialogShown()) {
                     getPlayer().finishReally();
                 }
                 break;
@@ -431,7 +484,6 @@ public class VideoLoaderController extends PlayerEventListenerHelper implements 
                 // Except when playing from queue
                 if (mPlaylist.getNext() != null) {
                     loadNext();
-                    getPlayer().showOverlay(true);
                 } else {
                     getPlayer().setPositionMs(getPlayer().getDurationMs());
                     getPlayer().setPlayWhenReady(false);

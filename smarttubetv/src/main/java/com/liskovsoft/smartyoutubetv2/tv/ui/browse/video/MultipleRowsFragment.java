@@ -5,6 +5,7 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.leanback.app.RowsSupportFragment;
 import androidx.leanback.widget.ArrayObjectAdapter;
+import androidx.leanback.widget.ClassPresenterSelector;
 import androidx.leanback.widget.HeaderItem;
 import androidx.leanback.widget.ListRow;
 import androidx.leanback.widget.ListRowPresenter;
@@ -13,15 +14,19 @@ import androidx.leanback.widget.Presenter;
 import androidx.leanback.widget.Row;
 import androidx.leanback.widget.RowPresenter;
 import androidx.leanback.widget.RowPresenter.ViewHolder;
+
 import com.liskovsoft.sharedutils.mylogger.Log;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.VideoGroup;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.interfaces.VideoGroupPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.adapter.VideoGroupObjectAdapter;
+import com.liskovsoft.smartyoutubetv2.tv.presenter.ChannelHeaderPresenter;
+import com.liskovsoft.smartyoutubetv2.tv.presenter.ChannelHeaderPresenter.ChannelHeaderCallback;
+import com.liskovsoft.smartyoutubetv2.tv.presenter.ShortsCardPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.presenter.VideoCardPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.presenter.CustomListRowPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.presenter.base.OnItemLongPressedListener;
-import com.liskovsoft.smartyoutubetv2.tv.ui.browse.interfaces.VideoCategoryFragment;
+import com.liskovsoft.smartyoutubetv2.tv.ui.browse.interfaces.VideoSection;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.LeanbackActivity;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.UriBackgroundManager;
 import com.liskovsoft.smartyoutubetv2.tv.util.ViewUtil;
@@ -31,7 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public abstract class MultipleRowsFragment extends RowsSupportFragment implements VideoCategoryFragment {
+public abstract class MultipleRowsFragment extends RowsSupportFragment implements VideoSection {
     private static final String TAG = MultipleRowsFragment.class.getSimpleName();
     private UriBackgroundManager mBackgroundManager;
     private ArrayObjectAdapter mRowsAdapter;
@@ -40,7 +45,9 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
     private final List<VideoGroup> mPendingUpdates = new ArrayList<>();
     private VideoGroupPresenter mMainPresenter;
     private VideoCardPresenter mCardPresenter;
+    private ShortsCardPresenter mShortsPresenter;
     private int mSelectedRowIndex = -1;
+    private ChannelHeaderCallback mChannelHeaderCallback;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -48,11 +55,16 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
         
         mMainPresenter = getMainPresenter();
         mCardPresenter = new VideoCardPresenter();
+        mShortsPresenter = new ShortsCardPresenter();
         mBackgroundManager = ((LeanbackActivity) getActivity()).getBackgroundManager();
 
         setupAdapter();
         setupEventListeners();
         applyPendingUpdates();
+    }
+
+    protected void addHeader(ChannelHeaderCallback callback) {
+        mChannelHeaderCallback = callback;
     }
 
     protected abstract VideoGroupPresenter getMainPresenter();
@@ -76,7 +88,11 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
         if (mRowsAdapter == null) {
             mRowPresenter = new CustomListRowPresenter();
 
-            mRowsAdapter = new ArrayObjectAdapter(mRowPresenter);
+            ClassPresenterSelector presenterSelector = new ClassPresenterSelector();
+            presenterSelector.addClassPresenter(ListRow.class, mRowPresenter);
+            presenterSelector.addClassPresenter(ChannelHeaderCallback.class, new ChannelHeaderPresenter());
+
+            mRowsAdapter = new ArrayObjectAdapter(presenterSelector);
             setAdapter(mRowsAdapter);
         }
     }
@@ -85,12 +101,16 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
         setOnItemViewClickedListener(new ItemViewClickedListener());
         setOnItemViewSelectedListener(new ItemViewSelectedListener());
         mCardPresenter.setOnItemViewLongPressedListener(new ItemViewLongPressedListener());
+        mShortsPresenter.setOnItemViewLongPressedListener(new ItemViewLongPressedListener());
     }
 
     @Override
     public void clear() {
         if (mRowsAdapter != null) {
             mRowsAdapter.clear();
+            if (mChannelHeaderCallback != null) {
+                mRowsAdapter.add(mChannelHeaderCallback);
+            }
         }
 
         if (mVideoGroupAdapters != null) {
@@ -98,7 +118,33 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
         }
 
         // Reset the position (bug appeared after fragment been reused)
-        setPosition(0);
+        setPosition(mChannelHeaderCallback != null ? 1 : 0);
+    }
+
+    private void removeByIndex(int idx) {
+        if (mRowsAdapter != null && mRowsAdapter.size() > idx) {
+            ListRow row = (ListRow) mRowsAdapter.get(idx);
+            mRowsAdapter.remove(row);
+            VideoGroupObjectAdapter group = (VideoGroupObjectAdapter) row.getAdapter();
+            mVideoGroupAdapters.values().remove(group);
+        }
+    }
+
+    private void removeById(int id) {
+        if (mRowsAdapter != null) {
+            VideoGroupObjectAdapter needed = mVideoGroupAdapters.get(id);
+            for (int i = 0; i < mRowsAdapter.size(); i++) {
+                Object row = mRowsAdapter.get(i);
+
+                if (row instanceof ListRow) {
+                    VideoGroupObjectAdapter adapter = (VideoGroupObjectAdapter) ((ListRow) row).getAdapter();
+                    if (adapter == needed) {
+                        mRowsAdapter.remove(row);
+                        mVideoGroupAdapters.remove(id);
+                    }
+                }
+            }
+        }
     }
 
     @Override
@@ -117,10 +163,19 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
             return;
         }
 
+        // Correct position depending on the search bar presence
+        if (group.getPosition() != -1 && mChannelHeaderCallback != null) {
+            group.setPosition(group.getPosition() + 1);
+        }
+
         int action = group.getAction();
 
         if (action == VideoGroup.ACTION_REPLACE) {
-            clear();
+            if (group.getPosition() == -1) {
+                clear();
+            } else {
+                removeById(group.getId());
+            }
         } else if (action == VideoGroup.ACTION_REMOVE) {
             VideoGroupObjectAdapter adapter = mVideoGroupAdapters.get(group.getId());
             if (adapter != null) {
@@ -145,7 +200,7 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
         VideoGroupObjectAdapter existingAdapter = mVideoGroupAdapters.get(mediaGroupId);
 
         if (existingAdapter == null) {
-            VideoGroupObjectAdapter mediaGroupAdapter = new VideoGroupObjectAdapter(group, mCardPresenter);
+            VideoGroupObjectAdapter mediaGroupAdapter = new VideoGroupObjectAdapter(group, group.isShorts() ? mShortsPresenter : mCardPresenter);
 
             mVideoGroupAdapters.put(mediaGroupId, mediaGroupAdapter);
 
@@ -161,7 +216,7 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
 
             freeze(true);
 
-            existingAdapter.append(group); // continue row
+            existingAdapter.add(group); // continue
 
             freeze(false);
         }
@@ -194,6 +249,11 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
         }
     }
 
+    @Override
+    public void selectItem(Video item) {
+        // NOP
+    }
+
     /**
      * Disable scrolling on partially updated rows. This prevent cards from misbehaving.
      */
@@ -201,7 +261,7 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
         // Disable scrolling on partially updated rows. This prevent controls from misbehaving.
         if (mRowPresenter != null) {
             ViewHolder vh = getRowViewHolder(getSelectedPosition());
-            if (vh != null) {
+            if (vh instanceof ListRowPresenter.ViewHolder) {
                 mRowPresenter.freeze(vh, freeze);
             }
         }

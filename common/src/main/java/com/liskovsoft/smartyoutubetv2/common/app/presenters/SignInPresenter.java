@@ -2,29 +2,28 @@ package com.liskovsoft.smartyoutubetv2.common.app.presenters;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
-import com.liskovsoft.mediaserviceinterfaces.MediaService;
+import com.liskovsoft.mediaserviceinterfaces.HubService;
 import com.liskovsoft.sharedutils.mylogger.Log;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.base.BasePresenter;
+import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.AccountSelectionPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.views.SignInView;
 import com.liskovsoft.smartyoutubetv2.common.app.views.ViewManager;
 import com.liskovsoft.sharedutils.rx.RxHelper;
-import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
-import com.liskovsoft.smartyoutubetv2.common.prefs.GeneralData;
-import com.liskovsoft.youtubeapi.service.YouTubeMediaService;
+import com.liskovsoft.youtubeapi.service.YouTubeHubService;
 import io.reactivex.disposables.Disposable;
 
 public class SignInPresenter extends BasePresenter<SignInView> {
     private static final String TAG = SignInPresenter.class.getSimpleName();
     @SuppressLint("StaticFieldLeak")
     private static SignInPresenter sInstance;
-    private final MediaService mMediaService;
+    private final HubService mHubService;
     private final BrowsePresenter mBrowsePresenter;
     private final SplashPresenter mSplashPresenter;
     private Disposable mSignInAction;
 
     private SignInPresenter(Context context) {
         super(context);
-        mMediaService = YouTubeMediaService.instance();
+        mHubService = YouTubeHubService.instance();
         mBrowsePresenter = BrowsePresenter.instance(context);
         mSplashPresenter = SplashPresenter.instance(context);
     }
@@ -63,7 +62,7 @@ public class SignInPresenter extends BasePresenter<SignInView> {
     }
 
     private void updateUserCode() {
-        mSignInAction = mMediaService.getSignInService().signInObserve()
+        mSignInAction = mHubService.getSignInService().signInObserve()
                 .subscribe(
                         userCode -> getView().showCode(userCode),
                         error -> Log.e(TAG, "Sign in error: %s", error.getMessage()),
@@ -72,12 +71,15 @@ public class SignInPresenter extends BasePresenter<SignInView> {
                             if (getView() != null) {
                                 getView().close();
                             }
-                            mBrowsePresenter.refresh();
-                            mSplashPresenter.updateChannels();
 
-                            // Account history might be turned off (common issue).
-                            GeneralData.instance(getContext()).enableHistory(true);
-                            MediaServiceManager.instance().enableHistory(true);
+                            AccountSelectionPresenter.instance(getContext()).show(true);
+
+                            //mBrowsePresenter.refresh();
+                            //mSplashPresenter.updateChannels();
+                            //
+                            //// Account history might be turned off (common issue).
+                            //GeneralData.instance(getContext()).enableHistory(true);
+                            //MediaServiceManager.instance().enableHistory(true);
                         }
                  );
     }

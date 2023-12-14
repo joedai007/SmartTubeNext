@@ -4,8 +4,9 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.os.Build.VERSION;
 import com.liskovsoft.sharedutils.helpers.Helpers;
+import com.liskovsoft.smartyoutubetv2.common.prefs.AppPrefs.ProfileChangeListener;
 
-public class PlayerTweaksData {
+public class PlayerTweaksData implements ProfileChangeListener {
     private static final String VIDEO_PLAYER_TWEAKS_DATA = "video_player_tweaks_data";
     public static final int PLAYER_DATA_SOURCE_DEFAULT = 0;
     public static final int PLAYER_DATA_SOURCE_OKHTTP = 1;
@@ -75,13 +76,21 @@ public class PlayerTweaksData {
     private boolean mIsBufferOnStreamsDisabled;
     private boolean mIsSectionPlaylistEnabled;
     private boolean mIsScreenOffTimeoutEnabled;
+    private boolean mIsBootScreenOffEnabled;
     private int mScreenOffTimeoutSec;
+    private int mScreenOffDimmingPercents;
     private boolean mIsUIAnimationsEnabled;
     private boolean mIsLikesCounterEnabled;
     private boolean mIsChapterNotificationEnabled;
+    private boolean mIsPlayerUiOnNextEnabled;
+    private boolean mIsPlayerAutoVolumeEnabled;
+    private boolean mIsPlayerGlobalFocusEnabled;
+    private boolean mIsUnsafeAudioFormatsEnabled;
+    private boolean mIsHighBitrateFormatsUnlocked;
 
     private PlayerTweaksData(Context context) {
         mPrefs = AppPrefs.instance(context);
+        mPrefs.addListener(this);
         restoreData();
     }
 
@@ -227,6 +236,15 @@ public class PlayerTweaksData {
     public void enableTunneledPlayback(boolean enable) {
         mIsTunneledPlaybackEnabled = enable;
         persistData();
+    }
+
+    public void enableUnsafeAudioFormats(boolean enable) {
+        mIsUnsafeAudioFormatsEnabled = enable;
+        persistData();
+    }
+
+    public boolean isUnsafeAudioFormatsEnabled() {
+        return mIsUnsafeAudioFormatsEnabled;
     }
 
     public void enablePlayerButton(int playerButtons) {
@@ -397,6 +415,24 @@ public class PlayerTweaksData {
         return mScreenOffTimeoutSec;
     }
 
+    public void setScreenOffDimmingPercents(int percents) {
+        mScreenOffDimmingPercents = percents;
+        persistData();
+    }
+
+    public int getScreenOffDimmingPercents() {
+        return mScreenOffDimmingPercents;
+    }
+
+    public void enableBootScreenOff(boolean enable) {
+        mIsBootScreenOffEnabled = enable;
+        persistData();
+    }
+
+    public boolean isBootScreenOffEnabled() {
+        return mIsBootScreenOffEnabled && !isScreenOffTimeoutEnabled();
+    }
+
     public void enableUIAnimations(boolean enable) {
         mIsUIAnimationsEnabled = enable;
         persistData();
@@ -424,8 +460,44 @@ public class PlayerTweaksData {
         return mIsChapterNotificationEnabled;
     }
 
+    public void enablePlayerUiOnNext(boolean enable) {
+        mIsPlayerUiOnNextEnabled = enable;
+        persistData();
+    }
+
+    public boolean isPlayerUiOnNextEnabled() {
+        return mIsPlayerUiOnNextEnabled;
+    }
+
+    public void enablePlayerAutoVolume(boolean enable) {
+        mIsPlayerAutoVolumeEnabled = enable;
+        persistData();
+    }
+
+    public boolean isPlayerAutoVolumeEnabled() {
+        return mIsPlayerAutoVolumeEnabled;
+    }
+
+    public void enablePlayerGlobalFocus(boolean enable) {
+        mIsPlayerGlobalFocusEnabled = enable;
+        persistData();
+    }
+
+    public boolean isPlayerGlobalFocusEnabled() {
+        return mIsPlayerGlobalFocusEnabled;
+    }
+
+    public void unlockHighBitrateFormats(boolean enable) {
+        mIsHighBitrateFormatsUnlocked = enable;
+        persistData();
+    }
+
+    public boolean isHighBitrateFormatsUnlocked() {
+        return mIsHighBitrateFormatsUnlocked;
+    }
+
     private void restoreData() {
-        String data = mPrefs.getData(VIDEO_PLAYER_TWEAKS_DATA);
+        String data = mPrefs.getProfileData(VIDEO_PLAYER_TWEAKS_DATA);
 
         String[] split = Helpers.splitObjectLegacy(data);
 
@@ -457,7 +529,7 @@ public class PlayerTweaksData {
         mIsButtonLongClickEnabled = Helpers.parseBoolean(split, 24, true);
         mIsLongSpeedListEnabled = Helpers.parseBoolean(split, 25, true);
         // Android 6 and below may crash running Cronet???
-        mPlayerDataSource = Helpers.parseInt(split, 26, PLAYER_DATA_SOURCE_CRONET);
+        mPlayerDataSource = Helpers.parseInt(split, 26, VERSION.SDK_INT > 23 ? PLAYER_DATA_SOURCE_CRONET : PLAYER_DATA_SOURCE_DEFAULT);
         mUnlockAllFormats = Helpers.parseBoolean(split, 27, false);
         mIsDashUrlStreamsForced = Helpers.parseBoolean(split, 28, false);
         mIsSonyFrameDropFixEnabled = Helpers.parseBoolean(split, 29, false);
@@ -469,12 +541,19 @@ public class PlayerTweaksData {
         mIsUIAnimationsEnabled = Helpers.parseBoolean(split, 34, false);
         mIsLikesCounterEnabled = Helpers.parseBoolean(split, 35, true);
         mIsChapterNotificationEnabled = Helpers.parseBoolean(split, 36, false);
+        mScreenOffDimmingPercents = Helpers.parseInt(split, 37, 100);
+        mIsBootScreenOffEnabled = Helpers.parseBoolean(split, 38, false);
+        mIsPlayerUiOnNextEnabled = Helpers.parseBoolean(split, 39, false);
+        mIsPlayerAutoVolumeEnabled = Helpers.parseBoolean(split, 40, true);
+        mIsPlayerGlobalFocusEnabled = Helpers.parseBoolean(split, 41, true);
+        mIsUnsafeAudioFormatsEnabled = Helpers.parseBoolean(split, 42, true);
+        mIsHighBitrateFormatsUnlocked = Helpers.parseBoolean(split, 43, false);
 
         updateDefaultValues();
     }
 
     private void persistData() {
-        mPrefs.setData(VIDEO_PLAYER_TWEAKS_DATA, Helpers.mergeObject(
+        mPrefs.setProfileData(VIDEO_PLAYER_TWEAKS_DATA, Helpers.mergeObject(
                 mIsAmlogicFixEnabled, mIsAmazonFrameDropFixEnabled, mIsSnapToVsyncDisabled,
                 mIsProfileLevelCheckSkipped, mIsSWDecoderForced, mIsTextureViewEnabled,
                 null, mIsSetOutputSurfaceWorkaroundEnabled, mIsAudioSyncFixEnabled, mIsKeepFinishedActivityEnabled, mIsHlsStreamsForced,
@@ -483,8 +562,10 @@ public class PlayerTweaksData {
                 mIsAvcOverVp9Preferred, mIsChatPlacedLeft, mIsRealChannelIconEnabled, mPixelRatio, mIsQualityInfoBitrateEnabled,
                 mIsSpeedButtonOldBehaviorEnabled, mIsButtonLongClickEnabled, mIsLongSpeedListEnabled, mPlayerDataSource, mUnlockAllFormats,
                 mIsDashUrlStreamsForced, mIsSonyFrameDropFixEnabled, mIsBufferOnStreamsDisabled, mIsSectionPlaylistEnabled,
-                mIsScreenOffTimeoutEnabled, mScreenOffTimeoutSec, mIsUIAnimationsEnabled, mIsLikesCounterEnabled, mIsChapterNotificationEnabled
-        ));
+                mIsScreenOffTimeoutEnabled, mScreenOffTimeoutSec, mIsUIAnimationsEnabled, mIsLikesCounterEnabled, mIsChapterNotificationEnabled,
+                mScreenOffDimmingPercents, mIsBootScreenOffEnabled, mIsPlayerUiOnNextEnabled, mIsPlayerAutoVolumeEnabled, mIsPlayerGlobalFocusEnabled,
+                mIsUnsafeAudioFormatsEnabled, mIsHighBitrateFormatsUnlocked
+                ));
     }
 
     private void updateDefaultValues() {
@@ -493,5 +574,15 @@ public class PlayerTweaksData {
             int bits = 32 - 24;
             mPlayerButtons = mPlayerButtons << bits >>> bits; // remove auto enabled bits
         }
+
+        // Replace old button with new one
+        if (isPlayerButtonEnabled(PLAYER_BUTTON_SCREEN_OFF)) {
+            enablePlayerButton(PLAYER_BUTTON_SCREEN_OFF_TIMEOUT);
+        }
+    }
+
+    @Override
+    public void onProfileChanged() {
+        restoreData();
     }
 }

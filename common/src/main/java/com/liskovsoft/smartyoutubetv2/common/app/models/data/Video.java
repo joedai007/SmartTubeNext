@@ -1,17 +1,21 @@
 package com.liskovsoft.smartyoutubetv2.common.app.models.data;
 
+import android.content.Context;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.liskovsoft.mediaserviceinterfaces.data.ChapterItem;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItem;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItemFormatInfo;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItemMetadata;
+import com.liskovsoft.mediaserviceinterfaces.data.NotificationState;
 import com.liskovsoft.mediaserviceinterfaces.data.PlaylistInfo;
 import com.liskovsoft.sharedutils.helpers.DateHelper;
 import com.liskovsoft.sharedutils.helpers.Helpers;
+import com.liskovsoft.sharedutils.helpers.MessageHelpers;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.service.VideoStateService;
 import com.liskovsoft.youtubeapi.common.helpers.ServiceHelper;
-import com.liskovsoft.youtubeapi.service.YouTubeMediaService;
+import com.liskovsoft.youtubeapi.service.YouTubeHubService;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -23,6 +27,7 @@ import java.util.List;
 public final class Video {
     public static final String TERTIARY_TEXT_DELIM = "•";
     public static final long MAX_DURATION_MS = 24 * 60 * 60 * 1_000;
+    private static final String OBJ_DELIM = "&vi;";
     private static final int MAX_AUTHOR_LENGTH_CHARS = 20;
     private static final String[] sNotPlaylistParams = new String[] {"EAIYAQ%3D%3D"};
     private static final String BLACK_PLACEHOLDER_URL = "https://via.placeholder.com/1280x720/000000/000000";
@@ -56,6 +61,7 @@ public final class Video {
     public boolean hasNewContent;
     public boolean isLive;
     public boolean isUpcoming;
+    public boolean isShorts;
     public boolean isChapter;
     public boolean isMovie;
     public boolean isSubscribed;
@@ -73,8 +79,10 @@ public final class Video {
     public boolean incognito;
     public String likeCount;
     public String dislikeCount;
+    public float volume = 1.0f;
     private int startSegmentNum;
     private WeakReference<VideoGroup> group; // Memory leak fix. Used to get next page when scrolling.
+    public List<NotificationState> notificationStates;
 
     public Video() {
        // NOP
@@ -125,6 +133,7 @@ public final class Video {
         video.reloadPageKey = item.getReloadPageKey();
         video.isLive = item.isLive();
         video.isUpcoming = item.isUpcoming();
+        video.isShorts = item.isShorts();
         video.isMovie = item.isMovie();
         video.clickTrackingParams = item.getClickTrackingParams();
         video.mediaItem = item;
@@ -211,6 +220,13 @@ public final class Video {
         int hashCode = Helpers.hashCodeAny(videoId, playlistId, reloadPageKey, playlistParams, channelId, mediaItem, extra);
         return hashCode != -1 ? hashCode : super.hashCode();
     }
+
+    public static void printDebugInfo(Context context, Video item) {
+        MessageHelpers.showLongMessage(context,
+                String.format("videoId=%s, playlistId=%s, reloadPageKey=%s, playlistParams=%s, channelId=%s, mediaItem=%s, extra=%s",
+                        item.videoId, item.playlistId, item.reloadPageKey, item.playlistParams, item.channelId, item.mediaItem, item.extra)
+        );
+    }
     
     public static boolean equals(Video video1, Video video2) {
         if (video1 == null) {
@@ -290,7 +306,7 @@ public final class Video {
             return null;
         }
 
-        String[] split = spec.split("&vi;");
+        String[] split = Helpers.split(OBJ_DELIM, spec);
 
         // 'playlistParams' backward compatibility
         if (split.length == 10) {
@@ -327,7 +343,7 @@ public final class Video {
         result.channelId = Helpers.parseStr(split[6]);
         result.bgImageUrl = Helpers.parseStr(split[7]);
         result.cardImageUrl = Helpers.parseStr(split[8]);
-        result.mediaItem = YouTubeMediaService.deserializeMediaItem(Helpers.parseStr(split[9]));
+        result.mediaItem = YouTubeHubService.deserializeMediaItem(Helpers.parseStr(split[9]));
         result.playlistParams = Helpers.parseStr(split[10]);
         result.extra = Helpers.parseInt(split[11]);
         result.reloadPageKey = Helpers.parseStr(split[12]);
@@ -336,11 +352,12 @@ public final class Video {
         return result;
     }
 
+    @NonNull
     @Override
     public String toString() {
-        return String.format("%s&vi;%s&vi;%s&vi;%s&vi;%s&vi;%s&vi;%s&vi;%s&vi;%s&vi;%s&vi;%s&vi;%s&vi;%s&vi;%s",
+        return Helpers.merge(OBJ_DELIM,
                 id, category, title, videoId, videoUrl, playlistId, channelId, bgImageUrl, cardImageUrl,
-                YouTubeMediaService.serialize(mediaItem), playlistParams, extra, getReloadPageKey(), itemType);
+                YouTubeHubService.serialize(mediaItem), playlistParams, extra, getReloadPageKey(), itemType);
     }
 
     //@Override
@@ -489,27 +506,39 @@ public final class Video {
     }
 
     public boolean belongsToHome() {
-        return getGroup() != null && getGroup().getMediaGroup() != null && getGroup().getMediaGroup().getType() == MediaGroup.TYPE_HOME;
+        return belongsToGroup(MediaGroup.TYPE_HOME);
     }
 
     public boolean belongsToChannel() {
-        return getGroup() != null && getGroup().getMediaGroup() != null && getGroup().getMediaGroup().getType() == MediaGroup.TYPE_CHANNEL;
+        return belongsToGroup(MediaGroup.TYPE_CHANNEL);
     }
 
     public boolean belongsToChannelUploads() {
-        return getGroup() != null && getGroup().getMediaGroup() != null && getGroup().getMediaGroup().getType() == MediaGroup.TYPE_CHANNEL_UPLOADS;
+        return belongsToGroup(MediaGroup.TYPE_CHANNEL_UPLOADS);
     }
 
     public boolean belongsToSubscriptions() {
-        return getGroup() != null && getGroup().getMediaGroup() != null && getGroup().getMediaGroup().getType() == MediaGroup.TYPE_SUBSCRIPTIONS;
+        return belongsToGroup(MediaGroup.TYPE_SUBSCRIPTIONS);
     }
 
     public boolean belongsToHistory() {
-        return getGroup() != null && getGroup().getMediaGroup() != null && getGroup().getMediaGroup().getType() == MediaGroup.TYPE_HISTORY;
+        return belongsToGroup(MediaGroup.TYPE_HISTORY);
     }
 
     public boolean belongsToMusic() {
-        return getGroup() != null && getGroup().getMediaGroup() != null && getGroup().getMediaGroup().getType() == MediaGroup.TYPE_MUSIC;
+        return belongsToGroup(MediaGroup.TYPE_MUSIC);
+    }
+
+    public boolean belongsToShorts() {
+        return belongsToGroup(MediaGroup.TYPE_SHORTS);
+    }
+
+    public boolean belongsToNotifications() {
+        return belongsToGroup(MediaGroup.TYPE_NOTIFICATIONS);
+    }
+
+    private boolean belongsToGroup(int groupId) {
+        return getGroup() != null && getGroup().getMediaGroup() != null && getGroup().getMediaGroup().getType() == groupId;
     }
 
     public boolean belongsToSection() {
@@ -565,6 +594,7 @@ public final class Video {
         isSubscribed = metadata.isSubscribed();
         likeCount = metadata.getLikeCount();
         dislikeCount = metadata.getDislikeCount();
+        notificationStates = metadata.getNotificationStates();
         isSynced = true;
 
         if (mediaItem != null) {
@@ -588,6 +618,8 @@ public final class Video {
             startTimeMs = formatInfo.getStartTimeMs() > 0 ? formatInfo.getStartTimeMs() : DateHelper.toUnixTimeMs(formatInfo.getStartTimestamp());
             startSegmentNum = formatInfo.getStartSegmentNum();
         }
+
+        volume = formatInfo.getVolumeLevel();
     }
 
     /**

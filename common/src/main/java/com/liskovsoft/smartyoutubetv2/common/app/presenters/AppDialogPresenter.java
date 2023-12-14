@@ -4,13 +4,13 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
+import com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.OptionCategory;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.OptionItem;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.base.BasePresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.views.AppDialogView;
 import com.liskovsoft.smartyoutubetv2.common.app.views.ViewManager;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 public class AppDialogPresenter extends BasePresenter<AppDialogView> {
@@ -26,61 +26,11 @@ public class AppDialogPresenter extends BasePresenter<AppDialogView> {
     private boolean mIsExpandable = true;
     private int mId;
 
-    public static class OptionCategory {
-        public static OptionCategory radioList(String title, List<OptionItem> items) {
-            return new OptionCategory(title, items, TYPE_RADIO_LIST);
-        }
-
-        public static OptionCategory checkedList(String title, List<OptionItem> items) {
-            return new OptionCategory(title, items, TYPE_CHECKBOX_LIST);
-        }
-
-        public static OptionCategory stringList(String title, List<OptionItem> items) {
-            return new OptionCategory(title, items, TYPE_STRING_LIST);
-        }
-
-        public static OptionCategory longText(String title, OptionItem item) {
-            return new OptionCategory(title, Collections.singletonList(item), TYPE_LONG_TEXT);
-        }
-
-        public static OptionCategory chat(String title, OptionItem item) {
-            return new OptionCategory(title, Collections.singletonList(item), TYPE_CHAT);
-        }
-
-        public static OptionCategory comments(String title, OptionItem item) {
-            return new OptionCategory(title, Collections.singletonList(item), TYPE_COMMENTS);
-        }
-
-        public static OptionCategory singleSwitch(OptionItem item) {
-            ArrayList<OptionItem> items = new ArrayList<>();
-            items.add(item);
-            return new OptionCategory(null, items, TYPE_SINGLE_SWITCH);
-        }
-
-        public static OptionCategory singleButton(OptionItem item) {
-            ArrayList<OptionItem> items = new ArrayList<>();
-            items.add(item);
-            return new OptionCategory(null, items, TYPE_SINGLE_BUTTON);
-        }
-
-        private OptionCategory(String title, List<OptionItem> items, int type) {
-            this.type = type;
-            this.title = title;
-            this.items = items;
-        }
-
-        public static final int TYPE_RADIO_LIST = 0;
-        public static final int TYPE_CHECKBOX_LIST = 1;
-        public static final int TYPE_SINGLE_SWITCH = 2;
-        public static final int TYPE_SINGLE_BUTTON = 3;
-        public static final int TYPE_STRING_LIST = 4;
-        public static final int TYPE_LONG_TEXT = 5;
-        public static final int TYPE_CHAT = 6;
-        public static final int TYPE_COMMENTS = 7;
-        public int type;
-        public String title;
-        public List<OptionItem> items;
-    }
+    private String mBackupTitle;
+    private List<OptionCategory> mBackupCategories;
+    private int mBackupId;
+    private boolean mBackupIsTransparent;
+    private boolean mBackupIsExpandable;
 
     public AppDialogPresenter(Context context) {
         super(context);
@@ -121,17 +71,28 @@ public class AppDialogPresenter extends BasePresenter<AppDialogView> {
         resetData();
     }
 
+    /**
+     * Doubled items fix / Empty dialog fix (multiple overlapped dialogs)
+     */
+    private void backupData() {
+        mBackupCategories = mCategories;
+        mBackupTitle = mTitle;
+        mBackupId = mId;
+        mBackupIsExpandable = mIsExpandable;
+        mBackupIsTransparent = mIsTransparent;
+    }
+
     private void resetData() {
         mCategories = new ArrayList<>();
         mIsExpandable = true;
         mIsTransparent = false;
         mId = 0;
+        mTitle = null;
     }
 
     @Override
     public void onViewInitialized() {
-        getView().show(mCategories, mTitle, mIsExpandable, mIsTransparent, mId);
-        resetData();
+        getView().show(mBackupCategories, mBackupTitle, mBackupIsExpandable, mBackupIsTransparent, mBackupId);
     }
 
     /**
@@ -151,13 +112,16 @@ public class AppDialogPresenter extends BasePresenter<AppDialogView> {
         showDialog(dialogTitle, null);
     }
 
-    public void showDialog(Runnable onClose) {
-        showDialog(null, onClose);
+    public void showDialog(Runnable onFinish) {
+        showDialog(null, onFinish);
     }
 
     public void showDialog(String dialogTitle, Runnable onFinish) {
         mTitle = dialogTitle;
         mOnFinish.add(onFinish);
+        
+        backupData(); // overlapped dialog fix
+        resetData(); // prepare to new call
 
         if (getView() != null) {
             onViewInitialized();
@@ -180,12 +144,22 @@ public class AppDialogPresenter extends BasePresenter<AppDialogView> {
         }
     }
 
+    public void clearBackstack() {
+        if (getView() != null) {
+            getView().clearBackstack();
+        }
+    }
+
     public boolean isDialogShown() {
         // Also check that current dialog almost closed (new view start is pending from a menu item)
         // Hmm. Maybe current dialog is pending. Check that view is null.
         // Also check that we aren't started the same view (nested dialog).
         return (ViewManager.isVisible(getView()) && getView() != null && !getView().isPaused()) ||
                 ViewManager.instance(getContext()).isViewPending(AppDialogView.class);
+    }
+
+    public void appendCategory(OptionCategory category) {
+        mCategories.add(category);
     }
 
     public void appendRadioCategory(String categoryTitle, List<OptionItem> items) {

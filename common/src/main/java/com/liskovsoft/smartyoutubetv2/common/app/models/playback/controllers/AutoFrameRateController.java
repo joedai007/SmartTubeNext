@@ -29,6 +29,7 @@ public class AutoFrameRateController extends PlayerEventListenerHelper implement
     private static final int AUTO_FRAME_RATE_ID = 21;
     private static final int AUTO_FRAME_RATE_DELAY_ID = 22;
     private static final int AUTO_FRAME_RATE_MODES_ID = 23;
+    private static final long SHORTS_DURATION_MS = 60 * 1_000;
     private final HQDialogController mUiManager;
     private final VideoStateController mStateUpdater;
     private final AutoFrameRateHelper mAutoFrameRateHelper;
@@ -54,7 +55,7 @@ public class AutoFrameRateController extends PlayerEventListenerHelper implement
 
     @Override
     public void onInit() {
-        mPlayerData = PlayerData.instance(getActivity());
+        mPlayerData = PlayerData.instance(getContext());
         mAutoFrameRateHelper.saveOriginalState(getActivity());
     }
 
@@ -79,12 +80,12 @@ public class AutoFrameRateController extends PlayerEventListenerHelper implement
 
     @Override
     public void onModeStart(Mode newMode) {
-        if (getActivity() == null) {
+        if (getContext() == null) {
             return;
         }
 
         // Ugoos already displays this message on each mode switch
-        String message = getActivity().getString(
+        String message = getContext().getString(
                 R.string.auto_frame_rate_applying,
                 newMode.getPhysicalWidth(),
                 newMode.getPhysicalHeight(),
@@ -96,12 +97,12 @@ public class AutoFrameRateController extends PlayerEventListenerHelper implement
 
     @Override
     public void onModeError(Mode newMode) {
-        if (getActivity() == null) {
+        if (getContext() == null) {
             return;
         }
 
         if (newMode != null) {
-            String msg = getActivity().getString(R.string.msg_mode_switch_error, UhdHelper.toResolution(newMode));
+            String msg = getContext().getString(R.string.msg_mode_switch_error, UhdHelper.toResolution(newMode));
             Log.e(TAG, msg);
 
             restorePlayback();
@@ -133,7 +134,7 @@ public class AutoFrameRateController extends PlayerEventListenerHelper implement
 
     private void applyAfrStop() {
         // Send data to AFR daemon via tvQuickActions app
-        TvQuickActions.sendStopAFR(getActivity());
+        TvQuickActions.sendStopAFR(getContext());
     }
 
     private void onFpsCorrectionClick() {
@@ -154,7 +155,7 @@ public class AutoFrameRateController extends PlayerEventListenerHelper implement
 
     private void applyAfrWrapper() {
         if (mPlayerData.isAfrEnabled()) {
-            AppDialogPresenter.instance(getActivity()).showDialogMessage("Applying AFR...", this::applyAfr, 1_000);
+            AppDialogPresenter.instance(getContext()).showDialogMessage("Applying AFR...", this::applyAfr, 1_000);
         }
     }
 
@@ -163,11 +164,12 @@ public class AutoFrameRateController extends PlayerEventListenerHelper implement
     }
 
     private void applyAfr() {
-        if (getPlayer() != null && mPlayerData.isAfrEnabled()) {
+        if (mPlayerData.isAfrEnabled() &&
+                getPlayer() != null && getPlayer().getDurationMs() > SHORTS_DURATION_MS) {
             FormatItem videoFormat = getPlayer().getVideoFormat();
             applyAfr(videoFormat, false);
             // Send data to AFR daemon via tvQuickActions app
-            TvQuickActions.sendStartAFR(getActivity(), videoFormat);
+            TvQuickActions.sendStartAFR(getContext(), videoFormat);
         } else {
             restoreAfr();
         }
@@ -186,7 +188,7 @@ public class AutoFrameRateController extends PlayerEventListenerHelper implement
                     videoFormat.getFrameRate(),
                     videoFormat.getWidth(),
                     videoFormat.getHeight(),
-                    getActivity().getClass().getSimpleName()
+                    getContext().getClass().getSimpleName()
             );
             Log.d(TAG, msg);
 
@@ -210,7 +212,8 @@ public class AutoFrameRateController extends PlayerEventListenerHelper implement
     }
 
     private void savePlayback() {
-        if (mAutoFrameRateHelper.isSupported() && mPlayerData != null && mPlayerData.isAfrEnabled() && mPlayerData.getAfrPauseMs() > 0) {
+        if (mAutoFrameRateHelper.isSupported() && mPlayerData != null && mPlayerData.isAfrEnabled() && mPlayerData.getAfrPauseMs() > 0 &&
+                getPlayer() != null && getPlayer().getDurationMs() > SHORTS_DURATION_MS) {
             mStateUpdater.blockPlay(true);
         }
 
@@ -224,57 +227,38 @@ public class AutoFrameRateController extends PlayerEventListenerHelper implement
         }
     }
 
-    //private void addUiOptions() {
-    //    if (mAutoFrameRateHelper.isSupported()) {
-    //        OptionCategory afrCategory = createAutoFrameRateCategory(
-    //                getActivity(), PlayerData.instance(getActivity()),
-    //                () -> {}, this::onResolutionSwitchClick, this::onFpsCorrectionClick, this::onDoubleRefreshRateClick);
-    //
-    //        OptionCategory afrDelayCategory = createAutoFrameRatePauseCategory(
-    //                getActivity(), PlayerData.instance(getActivity()));
-    //
-    //        mUiManager.addCategory(afrCategory);
-    //        mUiManager.addCategory(afrDelayCategory);
-    //        mUiManager.addOnDialogHide(mApplyAfr);
-    //    } else {
-    //        mUiManager.removeCategory(AUTO_FRAME_RATE_ID);
-    //        mUiManager.removeCategory(AUTO_FRAME_RATE_DELAY_ID);
-    //        mUiManager.removeOnDialogHide(mApplyAfr);
-    //    }
-    //}
-
     // Avoid nested dialogs. They have problems with timings. So player controls may hide without user interaction.
     private void addUiOptions() {
         if (mAutoFrameRateHelper.isSupported()) {
             OptionCategory afrCategory = createAutoFrameRateCategory(
-                    getActivity(), PlayerData.instance(getActivity()),
+                    getContext(), PlayerData.instance(getContext()),
                     () -> {}, this::onResolutionSwitchClick, this::onFpsCorrectionClick, this::onDoubleRefreshRateClick, this::onSkip24RateClick);
 
             OptionCategory afrPauseCategory = createAutoFrameRatePauseCategory(
-                    getActivity(), PlayerData.instance(getActivity()));
+                    getContext(), PlayerData.instance(getContext()));
 
-            OptionCategory modesCategory = createAutoFrameRateModesCategory(getActivity());
+            OptionCategory modesCategory = createAutoFrameRateModesCategory(getContext());
 
             // Create nested dialogs
 
             List<OptionItem> options = new ArrayList<>();
             options.add(UiOptionItem.from(afrCategory.title, optionItem -> {
-                AppDialogPresenter dialogPresenter = AppDialogPresenter.instance(getActivity());
-                dialogPresenter.appendCheckedCategory(afrCategory.title, afrCategory.options);
+                AppDialogPresenter dialogPresenter = AppDialogPresenter.instance(getContext());
+                dialogPresenter.appendCategory(afrCategory);
                 dialogPresenter.showDialog(afrCategory.title);
             }));
             options.add(UiOptionItem.from(afrPauseCategory.title, optionItem -> {
-                AppDialogPresenter dialogPresenter = AppDialogPresenter.instance(getActivity());
-                dialogPresenter.appendRadioCategory(afrPauseCategory.title, afrPauseCategory.options);
+                AppDialogPresenter dialogPresenter = AppDialogPresenter.instance(getContext());
+                dialogPresenter.appendCategory(afrPauseCategory);
                 dialogPresenter.showDialog(afrPauseCategory.title);
             }));
             options.add(UiOptionItem.from(modesCategory.title, optionItem -> {
-                AppDialogPresenter dialogPresenter = AppDialogPresenter.instance(getActivity());
-                dialogPresenter.appendLongTextCategory(modesCategory.title, modesCategory.option);
+                AppDialogPresenter dialogPresenter = AppDialogPresenter.instance(getContext());
+                dialogPresenter.appendCategory(modesCategory);
                 dialogPresenter.showDialog(modesCategory.title);
             }));
 
-            mUiManager.addCategory(OptionCategory.from(AUTO_FRAME_RATE_ID, OptionCategory.TYPE_STRING, getActivity().getString(R.string.auto_frame_rate), options));
+            mUiManager.addCategory(OptionCategory.from(AUTO_FRAME_RATE_ID, OptionCategory.TYPE_STRING_LIST, getContext().getString(R.string.auto_frame_rate), options));
             mUiManager.addOnDialogHide(mApplyAfr); // Apply NEW Settings on dialog close
         } else {
             mUiManager.removeCategory(AUTO_FRAME_RATE_ID);
@@ -328,7 +312,7 @@ public class AutoFrameRateController extends PlayerEventListenerHelper implement
         options.add(doubleRefreshRateOption);
         options.add(skip24RateOption);
 
-        return OptionCategory.from(AUTO_FRAME_RATE_ID, OptionCategory.TYPE_CHECKED, title, options);
+        return OptionCategory.from(AUTO_FRAME_RATE_ID, OptionCategory.TYPE_CHECKBOX_LIST, title, options);
     }
 
     public static OptionCategory createAutoFrameRatePauseCategory(Context context, PlayerData playerData) {
@@ -336,7 +320,7 @@ public class AutoFrameRateController extends PlayerEventListenerHelper implement
 
         List<OptionItem> options = new ArrayList<>();
 
-        for (int pauseMs : Helpers.range(0, 7_000, 500)) {
+        for (int pauseMs : Helpers.range(0, 7_000, 250)) {
             String optionTitle = pauseMs == 0 ? context.getString(R.string.option_never) : context.getString(R.string.auto_frame_rate_sec, pauseMs / 1_000f);
             options.add(UiOptionItem.from(optionTitle,
                     optionItem -> {
@@ -346,7 +330,7 @@ public class AutoFrameRateController extends PlayerEventListenerHelper implement
                     pauseMs == playerData.getAfrPauseMs()));
         }
 
-        return OptionCategory.from(AUTO_FRAME_RATE_DELAY_ID, OptionCategory.TYPE_RADIO, title, options);
+        return OptionCategory.from(AUTO_FRAME_RATE_DELAY_ID, OptionCategory.TYPE_RADIO_LIST, title, options);
     }
 
     public static OptionCategory createAutoFrameRateModesCategory(Context context) {

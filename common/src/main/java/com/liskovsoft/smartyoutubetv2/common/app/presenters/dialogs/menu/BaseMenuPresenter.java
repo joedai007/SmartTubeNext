@@ -19,7 +19,6 @@ import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.AccountSelec
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.AppUpdatePresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.menu.VideoMenuPresenter.VideoMenuCallback;
 import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
-import com.liskovsoft.smartyoutubetv2.common.prefs.ContentBlockData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.GeneralData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
 import com.liskovsoft.smartyoutubetv2.common.utils.AppDialogUtil;
@@ -123,7 +122,7 @@ public abstract class BaseMenuPresenter extends BasePresenter<Void> {
         } else {
             presenter.pinItem(section);
         }
-        MessageHelpers.showMessage(getContext(), section.title + ": " + getContext().getString(isItemPinned ? R.string.unpinned_from_sidebar : R.string.pinned_to_sidebar));
+        MessageHelpers.showMessage(getContext(), section.title + "\n" + getContext().getString(isItemPinned ? R.string.unpinned_from_sidebar : R.string.pinned_to_sidebar));
     }
 
     private Video createPinnedPlaylist(Video video) {
@@ -325,7 +324,7 @@ public abstract class BaseMenuPresenter extends BasePresenter<Void> {
         Observable<Void> action = manager.removePlaylistObserve(video.playlistId);
         GeneralData.instance(getContext()).setPlaylistOrder(video.playlistId, -1);
         RxHelper.execute(action,
-                () -> MessageHelpers.showMessage(getContext(), String.format("%s: %s", getContext().getString(R.string.cant_delete_empty_playlist), video.title)),
+                (error) -> MessageHelpers.showMessage(getContext(), String.format("%s: %s", getContext().getString(R.string.cant_delete_empty_playlist), video.title)),
                 () -> MessageHelpers.showMessage(getContext(), String.format("%s: %s", getContext().getString(R.string.removed_from_playlists), video.title))
         );
     }
@@ -334,7 +333,7 @@ public abstract class BaseMenuPresenter extends BasePresenter<Void> {
         MediaItemService manager = YouTubeMediaItemService.instance();
         Observable<Void> action = manager.savePlaylistObserve(video.playlistId);
         RxHelper.execute(action,
-                () -> MessageHelpers.showMessage(getContext(), String.format("%s: %s", getContext().getString(R.string.cant_save_playlist), video.title)),
+                (error) -> MessageHelpers.showMessage(getContext(), String.format("%s: %s", getContext().getString(R.string.cant_save_playlist), video.title)),
                 () -> MessageHelpers.showMessage(getContext(), String.format("%s: %s", getContext().getString(R.string.saved_to_playlists), video.title))
         );
     }
@@ -355,7 +354,9 @@ public abstract class BaseMenuPresenter extends BasePresenter<Void> {
 
         Video original = getVideo() != null ? getVideo() : new Video();
 
-        if (original.hasVideo() || !BrowsePresenter.instance(getContext()).isPlaylistsSection()) {
+        BrowsePresenter presenter = BrowsePresenter.instance(getContext());
+
+        if (original.hasVideo() || !(presenter.isPlaylistsSection() && presenter.inForeground())) {
             return;
         }
 
@@ -394,7 +395,7 @@ public abstract class BaseMenuPresenter extends BasePresenter<Void> {
                     Observable<Void> action = manager.createPlaylistObserve(newValue, video.hasVideo() ? video.videoId : null);
                     RxHelper.execute(
                             action,
-                            () -> MessageHelpers.showMessage(getContext(), newValue + ": " + getContext().getString(R.string.cant_save_playlist)),
+                            (error) -> MessageHelpers.showMessage(getContext(), newValue + ": " + getContext().getString(R.string.cant_save_playlist)),
                             () -> {
                                 if (!video.hasVideo()) { // Playlists section
                                     BrowsePresenter.instance(getContext()).refresh();
@@ -417,7 +418,9 @@ public abstract class BaseMenuPresenter extends BasePresenter<Void> {
 
         Video original = getVideo();
 
-        if (original == null || !BrowsePresenter.instance(getContext()).isPlaylistsSection()) {
+        BrowsePresenter presenter = BrowsePresenter.instance(getContext());
+
+        if (original == null || !(presenter.isPlaylistsSection() && presenter.inForeground())) {
             return;
         }
 
@@ -454,7 +457,7 @@ public abstract class BaseMenuPresenter extends BasePresenter<Void> {
                                 Observable<Void> action = manager.renamePlaylistObserve(firstItem.getPlaylistId(), newValue);
                                 RxHelper.execute(
                                         action,
-                                        () -> MessageHelpers.showMessage(getContext(), R.string.owned_playlist_warning),
+                                        (error) -> MessageHelpers.showMessage(getContext(), R.string.owned_playlist_warning),
                                         () -> {
                                             video.title = newValue;
                                             BrowsePresenter.instance(getContext()).syncItem(video);
@@ -503,7 +506,7 @@ public abstract class BaseMenuPresenter extends BasePresenter<Void> {
 
         BrowsePresenter presenter = BrowsePresenter.instance(getContext());
 
-        if (!presenter.isHistorySection()) {
+        if (!(presenter.isHistorySection() && presenter.inForeground())) {
             return;
         }
 
@@ -538,29 +541,7 @@ public abstract class BaseMenuPresenter extends BasePresenter<Void> {
             return;
         }
 
-        getDialogPresenter().appendSingleButton(
-                UiOptionItem.from(
-                        getContext().getString(
-                                ContentBlockData.instance(getContext()).isChannelExcluded(original.channelId) ?
-                                        R.string.content_block_stop_excluding_channel :
-                                        R.string.content_block_exclude_channel),
-                        optionItem -> {
-                            if (original.hasChannel()) {
-                                ContentBlockData.instance(getContext()).toggleExcludeChannel(original.channelId);
-                                closeDialog();
-                            } else {
-                                MessageHelpers.showMessage(getContext(), R.string.wait_data_loading);
-
-                                mServiceManager.loadMetadata(
-                                        original,
-                                        metadata -> {
-                                            original.sync(metadata);
-                                            ContentBlockData.instance(getContext()).excludeChannel(original.channelId);
-                                            closeDialog();
-                                        }
-                                );
-                            }
-                        }));
+        getDialogPresenter().appendSingleButton(AppDialogUtil.createExcludeFromContentBlockButton(getContext(), original, mServiceManager, this::closeDialog));
     }
 
     protected void updateEnabledMenuItems() {

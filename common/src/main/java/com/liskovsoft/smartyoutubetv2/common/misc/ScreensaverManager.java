@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.LinearLayout;
 import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.sharedutils.mylogger.Log;
 import com.liskovsoft.smartyoutubetv2.common.R;
@@ -21,7 +22,7 @@ import java.lang.ref.WeakReference;
 
 public class ScreensaverManager {
     private static final String TAG = ScreensaverManager.class.getSimpleName();
-    private static final int MODE_DIMMING = 0;
+    private static final int MODE_SCREENSAVER = 0;
     private static final int MODE_SCREEN_OFF = 1;
     private WeakReference<Activity> mActivity;
     private final WeakReference<View> mDimContainer;
@@ -29,10 +30,9 @@ public class ScreensaverManager {
     private final Runnable mUndimScreen = this::undimScreen;
     private final GeneralData mGeneralData;
     private PlayerTweaksData mTweaksData;
-    private int mMode = MODE_DIMMING;
-    private final int mDimColorResId = R.color.dimming;
-    private final int mScreenOffColorResId = R.color.black;
+    private int mMode = MODE_SCREENSAVER;
     private boolean mIsScreenOff;
+    private boolean mIsBlocked;
     private final Runnable mTimeoutHandler = () -> {
         // Playing the video and dialog overlay isn't shown
         if (ViewManager.instance(mActivity.get()).getTopView() != PlaybackView.class || !mTweaksData.isScreenOffTimeoutEnabled()) {
@@ -64,12 +64,13 @@ public class ScreensaverManager {
             LayoutInflater layoutInflater = activity.getLayoutInflater();
             dimContainer = layoutInflater.inflate(R.layout.dim_container, null);
             if (rootView instanceof ViewGroup) {
+                // NOTE: zoom will be bugged! Frames on top and bottom.
                 // Add negative margin to fix un-proper viewport positioning on some devices
                 // NOTE: below code is not working!!!
                 // NOTE: comment out code below if you don't want this
                 //LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 //        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT);
-                //params.setMargins(-200, -200, -200, -200);
+                //params.setMargins(-30, -30, -30, -30);
                 //((ViewGroup) rootView).addView(dimContainer, params);
 
                 ((ViewGroup) rootView).addView(dimContainer);
@@ -102,26 +103,36 @@ public class ScreensaverManager {
     }
 
     public void enable() {
+        if (mIsBlocked) {
+            Log.d(TAG, "Screensaver blocked!");
+            return;
+        }
+
         Log.d(TAG, "Enable screensaver");
 
         disable();
-        int delayMs = mGeneralData.getScreenDimmingTimeoutMs() == GeneralData.SCREEN_DIMMING_NEVER ?
+        int delayMs = mGeneralData.getScreensaverTimeoutMs() == GeneralData.SCREENSAVER_TIMEOUT_NEVER ?
                 10_000 :
-                mGeneralData.getScreenDimmingTimeoutMs();
+                mGeneralData.getScreensaverTimeoutMs();
         Utils.postDelayed(mDimScreen, delayMs);
     }
 
     public void disable() {
+        if (mIsBlocked) {
+            Log.d(TAG, "Screensaver blocked!");
+            return;
+        }
+
         Log.d(TAG, "Disable screensaver");
-        mMode = MODE_DIMMING;
+        mMode = MODE_SCREENSAVER;
         Utils.removeCallbacks(mDimScreen);
         Utils.postDelayed(mUndimScreen, 0);
     }
 
     public void doScreenOff() {
-        if (mIsScreenOff) {
-            return;
-        }
+        //if (mIsScreenOff) {
+        //    return;
+        //}
 
         disable();
         mMode = MODE_SCREEN_OFF;
@@ -130,6 +141,10 @@ public class ScreensaverManager {
 
     public boolean isScreenOff() {
         return mIsScreenOff;
+    }
+
+    public void setBlocked(boolean blocked) {
+        mIsBlocked = blocked;
     }
 
     private void enableTimeout() {
@@ -141,7 +156,7 @@ public class ScreensaverManager {
 
         Log.d(TAG, "Starting auto hide ui timer...");
         disableTimeout();
-        Utils.postDelayed(mTimeoutHandler, mTweaksData.getScreenOffTimeoutSec() * 1_000);
+        Utils.postDelayed(mTimeoutHandler, mTweaksData.getScreenOffTimeoutSec() * 1_000L);
     }
 
     private void disableTimeout() {
@@ -175,20 +190,25 @@ public class ScreensaverManager {
         }
 
         // Disable dimming on certain circumstances
-        if (show && mMode == MODE_DIMMING &&
+        if (show && mMode == MODE_SCREENSAVER &&
                 (       isPlaying() ||
                         isSigning() ||
-                        mGeneralData.getScreenDimmingTimeoutMs() == GeneralData.SCREEN_DIMMING_NEVER
+                        mGeneralData.getScreensaverTimeoutMs() == GeneralData.SCREENSAVER_TIMEOUT_NEVER
                 )
         ) {
             return;
         }
 
-        dimContainer.setBackgroundResource((mMode == MODE_DIMMING && mGeneralData.getScreenDimmingMode() == GeneralData.SCREEN_DIMMING_MODE_NORMAL) ?
-                mDimColorResId : mScreenOffColorResId);
+        int screenOffColor = Utils.getColor(activity, R.color.black, mTweaksData.getScreenOffDimmingPercents());
+        //int screenOffColorResId = mTweaksData.getScreenOffDimmingPercents() == 50 ? DIM_50 : DIM_100;
+        int screensaverColor = Utils.getColor(activity, R.color.black, mGeneralData.getScreensaverDimmingPercents());
+        //int screensaverColorResId = mGeneralData.getScreensaverMode() == GeneralData.SCREENSAVER_MODE_NORMAL ? DIM_50 : DIM_100;
+
+        dimContainer.setBackgroundColor(mMode == MODE_SCREENSAVER ? screensaverColor : screenOffColor);
+        //dimContainer.setBackgroundResource(mMode == MODE_SCREENSAVER ? screensaverColorResId : screenOffColorResId);
         dimContainer.setVisibility(show ? View.VISIBLE : View.GONE);
 
-        mIsScreenOff = mMode == MODE_SCREEN_OFF && show;
+        mIsScreenOff = mMode == MODE_SCREEN_OFF && mTweaksData.getScreenOffDimmingPercents() == 100 && show;
 
         if (mIsScreenOff) {
             hidePlayerOverlay();

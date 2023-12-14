@@ -10,10 +10,12 @@ import com.google.android.exoplayer2.PlaybackParameters;
 import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.SimpleExoPlayer;
 import com.google.android.exoplayer2.source.MediaSource;
+import com.google.android.exoplayer2.source.MergingMediaSource;
 import com.google.android.exoplayer2.source.TrackGroupArray;
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
 import com.google.android.exoplayer2.trackselection.TrackSelection;
 import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
+import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.sharedutils.mylogger.Log;
 import com.liskovsoft.smartyoutubetv2.common.BuildConfig;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
@@ -41,6 +43,7 @@ public class ExoPlayerController implements Player.EventListener, PlayerControll
     private final ExoMediaSourceFactory mMediaSourceFactory;
     private final TrackSelectorManager mTrackSelectorManager;
     private final TrackInfoFormatter2 mTrackFormatter;
+    private final TrackErrorFixer mTrackErrorFixer;
     private boolean mOnSourceChanged;
     private Video mVideo;
     private PlayerEventListener mEventListener;
@@ -54,11 +57,12 @@ public class ExoPlayerController implements Player.EventListener, PlayerControll
         PlayerTweaksData playerTweaksData = PlayerTweaksData.instance(context);
         mContext = context.getApplicationContext();
         mMediaSourceFactory = ExoMediaSourceFactory.instance(context);
-        mTrackSelectorManager = new TrackSelectorManager(PlayerData.instance(context).getAudioLanguage(), playerTweaksData.isAllFormatsUnlocked());
+        mTrackSelectorManager = new TrackSelectorManager(context);
         mTrackFormatter = new TrackInfoFormatter2();
         mTrackFormatter.enableBitrate(PlayerTweaksData.instance(context).isQualityInfoBitrateEnabled());
+        mTrackErrorFixer = new TrackErrorFixer(mTrackSelectorManager);
 
-        mMediaSourceFactory.setTrackErrorFixer(new TrackErrorFixer(mTrackSelectorManager));
+        mMediaSourceFactory.setTrackErrorFixer(mTrackErrorFixer);
 
         // Shield 720p fix???
         initFormats();
@@ -75,21 +79,18 @@ public class ExoPlayerController implements Player.EventListener, PlayerControll
 
     @Override
     public void openDash(InputStream dashManifest) {
-        //String userAgent = Util.getUserAgent(getActivity(), "VideoPlayerGlue");
         MediaSource mediaSource = mMediaSourceFactory.fromDashManifest(dashManifest);
         openMediaSource(mediaSource);
     }
 
     @Override
     public void openDashUrl(String dashManifestUrl) {
-        //String userAgent = Util.getUserAgent(getActivity(), "VideoPlayerGlue");
         MediaSource mediaSource = mMediaSourceFactory.fromDashManifestUrl(dashManifestUrl);
         openMediaSource(mediaSource);
     }
 
     @Override
     public void openHlsUrl(String hlsPlaylistUrl) {
-        //String userAgent = Util.getUserAgent(getActivity(), "VideoPlayerGlue");
         MediaSource mediaSource = mMediaSourceFactory.fromHlsPlaylist(hlsPlaylistUrl);
         openMediaSource(mediaSource);
     }
@@ -100,10 +101,18 @@ public class ExoPlayerController implements Player.EventListener, PlayerControll
         openMediaSource(mediaSource);
     }
 
+    @Override
+    public void openMerged(InputStream dashManifest, String hlsPlaylistUrl) {
+        MediaSource dashMediaSource = mMediaSourceFactory.fromDashManifest(dashManifest);
+        MediaSource hlsMediaSource = mMediaSourceFactory.fromHlsPlaylist(hlsPlaylistUrl);
+        openMediaSource(new MergingMediaSource(dashMediaSource, hlsMediaSource));
+    }
+
     private void openMediaSource(MediaSource mediaSource) {
         resetPlayerState(); // fixes occasional video artifacts and problems with quality switching
         setQualityInfo("");
 
+        mTrackSelectorManager.setMergedSource(mediaSource instanceof MergingMediaSource);
         mTrackSelectorManager.invalidate();
         mOnSourceChanged = true;
         mEventListener.onSourceChanged(mVideo);
@@ -255,15 +264,6 @@ public class ExoPlayerController implements Player.EventListener, PlayerControll
 
     @Override
     public FormatItem getVideoFormat() {
-        // Precise format (may not be loaded yet)
-        //if (mPlayer instanceof SimpleExoPlayer) {
-        //    Format videoFormat = ((SimpleExoPlayer) mPlayer).getVideoFormat();
-        //
-        //    if (videoFormat != null) {
-        //        return ExoFormatItem.from(videoFormat);
-        //    }
-        //}
-
         return ExoFormatItem.from(mTrackSelectorManager.getVideoTrack());
     }
 
@@ -316,7 +316,9 @@ public class ExoPlayerController implements Player.EventListener, PlayerControll
 
         // NOTE: Player is released at this point. So, there is no sense to restore the playback here.
 
-        mEventListener.onEngineError(error.type);
+        Throwable nested = error.getCause() != null ? error.getCause() : error;
+
+        mEventListener.onEngineError(error.type, error.rendererIndex, nested.getMessage());
     }
 
     @Override
@@ -369,12 +371,13 @@ public class ExoPlayerController implements Player.EventListener, PlayerControll
 
     @Override
     public void setSpeed(float speed) {
-        if (mPlayer != null && speed > 0) {
+        if (mPlayer != null && speed > 0 && !Helpers.floatEquals(speed, getSpeed())) {
             mPlayer.setPlaybackParameters(new PlaybackParameters(speed, mPlayer.getPlaybackParameters().pitch));
             mCurrentSpeed = speed; // NOTE: backup speed in case params not applied (playback is paused)
 
             mTrackFormatter.setSpeed(speed);
             setQualityInfo(mTrackFormatter.getQualityLabel());
+            mEventListener.onSpeedChanged(speed);
         }
     }
 
@@ -434,9 +437,25 @@ public class ExoPlayerController implements Player.EventListener, PlayerControll
             mVolumeBooster = null;
         }
 
-        if (volume > 1f && Build.VERSION.SDK_INT >= 19) {
+        // 5.1 audio cannot be boosted (format isn't supported error)
+        // also, other 2.0 tracks in 5.1 group is already too loud. so cancel them too.
+        if (volume > 1f && !contains51Audio() && Build.VERSION.SDK_INT >= 19) {
             mVolumeBooster = new VolumeBooster(true, volume);
             mPlayer.addAudioListener(mVolumeBooster);
         }
+    }
+    
+    private boolean contains51Audio() {
+        if (mTrackSelectorManager == null || mTrackSelectorManager.getAudioTracks() == null) {
+            return false;
+        }
+
+        for (MediaTrack track : mTrackSelectorManager.getAudioTracks()) {
+            if (TrackSelectorUtil.is51Audio(track.format)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

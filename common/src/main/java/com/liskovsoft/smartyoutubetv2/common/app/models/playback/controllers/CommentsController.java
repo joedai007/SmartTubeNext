@@ -1,5 +1,6 @@
 package com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers;
 
+import android.content.Context;
 import com.liskovsoft.mediaserviceinterfaces.CommentsService;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItemMetadata;
 import com.liskovsoft.sharedutils.mylogger.Log;
@@ -10,7 +11,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.CommentsRece
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.CommentsReceiverImpl;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.UiOptionItem;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.AppDialogPresenter;
-import com.liskovsoft.youtubeapi.service.YouTubeMediaService;
+import com.liskovsoft.youtubeapi.service.YouTubeHubService;
 import io.reactivex.disposables.Disposable;
 
 public class CommentsController extends PlayerEventListenerHelper implements MetadataListener {
@@ -19,16 +20,27 @@ public class CommentsController extends PlayerEventListenerHelper implements Met
     private Disposable mCommentsAction;
     private String mLiveChatKey;
     private String mCommentsKey;
+    private String mTitle;
+
+    public CommentsController() {
+    }
+
+    public CommentsController(Context context, MediaItemMetadata metadata) {
+        setAltContext(context);
+        onInit();
+        onMetadata(metadata);
+    }
 
     @Override
     public void onInit() {
-        mCommentsService = YouTubeMediaService.instance().getCommentsService();
+        mCommentsService = YouTubeHubService.instance().getCommentsService();
     }
 
     @Override
     public void onMetadata(MediaItemMetadata metadata) {
         mLiveChatKey = metadata != null && metadata.getLiveChatKey() != null ? metadata.getLiveChatKey() : null;
         mCommentsKey = metadata != null && metadata.getCommentsKey() != null ? metadata.getCommentsKey() : null;
+        mTitle = metadata != null ? metadata.getTitle() : null;
     }
 
     private void openCommentsDialog() {
@@ -38,11 +50,13 @@ public class CommentsController extends PlayerEventListenerHelper implements Met
             return;
         }
 
-        getPlayer().showControls(false);
+        if (getPlayer() != null) {
+            getPlayer().showControls(false);
+        }
 
-        String title = getPlayer().getVideo().getTitle();
+        String title = getPlayer() != null ? getPlayer().getVideo().getTitle() : mTitle;
 
-        CommentsReceiver commentsReceiver = new CommentsReceiverImpl(getActivity()) {
+        CommentsReceiver commentsReceiver = new CommentsReceiverImpl(getContext()) {
             @Override
             public void onLoadMore(String nextCommentsKey) {
                 loadComments(this, nextCommentsKey);
@@ -59,7 +73,7 @@ public class CommentsController extends PlayerEventListenerHelper implements Met
                     return;
                 }
 
-                CommentsReceiver nestedReceiver = new CommentsReceiverImpl(getActivity()) {
+                CommentsReceiver nestedReceiver = new CommentsReceiverImpl(getContext()) {
                     @Override
                     public void onLoadMore(String nextCommentsKey) {
                         loadComments(this, nextCommentsKey);
@@ -113,7 +127,7 @@ public class CommentsController extends PlayerEventListenerHelper implements Met
     }
 
     private void showDialog(CommentsReceiver receiver, String title) {
-        AppDialogPresenter appDialogPresenter = AppDialogPresenter.instance(getActivity());
+        AppDialogPresenter appDialogPresenter = AppDialogPresenter.instance(getContext());
 
         appDialogPresenter.appendCommentsCategory(title, UiOptionItem.from(title, receiver));
         appDialogPresenter.showDialog();

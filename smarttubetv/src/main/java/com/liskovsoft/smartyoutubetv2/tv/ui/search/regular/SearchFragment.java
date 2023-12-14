@@ -27,6 +27,7 @@ import androidx.leanback.widget.SpeechRecognitionCallback;
 import com.liskovsoft.sharedutils.mylogger.Log;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.VideoGroup;
+import com.liskovsoft.smartyoutubetv2.common.app.models.search.MediaServiceSearchTagProvider;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.SearchPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.views.SearchView;
 import com.liskovsoft.smartyoutubetv2.tv.R;
@@ -185,6 +186,11 @@ public class SearchFragment extends SearchSupportFragment
     }
 
     @Override
+    public void setTagsProvider(MediaServiceSearchTagProvider provider) {
+        // NOP
+    }
+
+    @Override
     public void showProgressBar(boolean show) {
         if (show) {
             mProgressBarManager.show();
@@ -210,7 +216,7 @@ public class SearchFragment extends SearchSupportFragment
             ListRow row = new ListRow(header, mAdapter);
             mRowsAdapter.add(row);
         } else {
-            mAdapter.append(group);
+            mAdapter.add(group);
         }
     }
 

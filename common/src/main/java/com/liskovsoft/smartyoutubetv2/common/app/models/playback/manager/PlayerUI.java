@@ -16,6 +16,7 @@ public interface PlayerUI {
     int REPEAT_MODE_LIST = 5;
     int BUTTON_OFF = 0;
     int BUTTON_ON = 1;
+    int BUTTON_DISABLED = -1;
     void updateSuggestions(VideoGroup group);
     void removeSuggestions(VideoGroup group);
     int getSuggestionsIndex(VideoGroup group);
@@ -34,7 +35,6 @@ public interface PlayerUI {
     void setRepeatButtonState(int modeIndex);
     void setLikeButtonState(boolean like);
     void setDislikeButtonState(boolean dislike);
-    void setSubscribeButtonState(boolean subscribe);
     void setPlaylistAddButtonState(boolean selected);
     void setSubtitleButtonState(boolean selected);
     void setSpeedButtonState(boolean selected);

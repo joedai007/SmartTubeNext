@@ -2,9 +2,9 @@ package com.liskovsoft.smartyoutubetv2.common.app.presenters;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
-import com.liskovsoft.mediaserviceinterfaces.MediaGroupService;
+import com.liskovsoft.mediaserviceinterfaces.ContentService;
 import com.liskovsoft.mediaserviceinterfaces.MediaItemService;
-import com.liskovsoft.mediaserviceinterfaces.MediaService;
+import com.liskovsoft.mediaserviceinterfaces.HubService;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItem;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItemMetadata;
@@ -12,6 +12,7 @@ import com.liskovsoft.sharedutils.helpers.MessageHelpers;
 import com.liskovsoft.sharedutils.mylogger.Log;
 import com.liskovsoft.sharedutils.rx.RxHelper;
 import com.liskovsoft.smartyoutubetv2.common.R;
+import com.liskovsoft.smartyoutubetv2.common.app.models.data.SampleMediaItem;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.VideoGroup;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.base.BasePresenter;
@@ -21,7 +22,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.menu.VideoMe
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.interfaces.VideoGroupPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.views.ChannelUploadsView;
 import com.liskovsoft.smartyoutubetv2.common.app.views.ViewManager;
-import com.liskovsoft.youtubeapi.service.YouTubeMediaService;
+import com.liskovsoft.youtubeapi.service.YouTubeHubService;
 import io.reactivex.Observable;
 import io.reactivex.disposables.Disposable;
 
@@ -31,18 +32,19 @@ public class ChannelUploadsPresenter extends BasePresenter<ChannelUploadsView> i
     private static final String TAG = ChannelUploadsPresenter.class.getSimpleName();
     @SuppressLint("StaticFieldLeak")
     private static ChannelUploadsPresenter sInstance;
-    private final MediaGroupService mGroupManager;
+    private final ContentService mContentService;
     private final MediaItemService mItemManager;
     private Disposable mUpdateAction;
     private Disposable mScrollAction;
     private Video mVideoItem;
-    private MediaGroup mMediaGroup;
+    private MediaGroup mRootGroup;
+    private MediaGroup mLastScrollGroup;
 
     public ChannelUploadsPresenter(Context context) {
         super(context);
-        MediaService mediaService = YouTubeMediaService.instance();
-        mGroupManager = mediaService.getMediaGroupService();
-        mItemManager = mediaService.getMediaItemService();
+        HubService hubService = YouTubeHubService.instance();
+        mContentService = hubService.getContentService();
+        mItemManager = hubService.getMediaItemService();
     }
 
     public static ChannelUploadsPresenter instance(Context context) {
@@ -75,7 +77,7 @@ public class ChannelUploadsPresenter extends BasePresenter<ChannelUploadsView> i
         // Destroy the cache only (!) when user pressed back (e.g. wants to explicitly kill the activity)
         // Otherwise keep the cache to easily restore in case activity is killed by the system.
         mVideoItem = null;
-        mMediaGroup = null;
+        mRootGroup = null;
     }
 
     @Override
@@ -118,7 +120,7 @@ public class ChannelUploadsPresenter extends BasePresenter<ChannelUploadsView> i
         boolean scrollInProgress = mScrollAction != null && !mScrollAction.isDisposed();
 
         if (!scrollInProgress) {
-            continueVideoGroup(group);
+            continueGroup(group);
         }
     }
 
@@ -156,12 +158,16 @@ public class ChannelUploadsPresenter extends BasePresenter<ChannelUploadsView> i
             return null;
         }
 
+        if (item.mediaItem == null) {
+            item.mediaItem = SampleMediaItem.from(item);
+        }
+
         disposeActions();
 
-        return item.hasNestedItems() ?
-               mGroupManager.getGroupObserve(item.mediaItem) :
+        return item.hasNestedItems() || item.isChannel() ?
+               mContentService.getGroupObserve(item.mediaItem) :
                item.hasReloadPageKey() ?
-               mGroupManager.getGroupObserve(item.getReloadPageKey()) :
+               mContentService.getGroupObserve(item.getReloadPageKey()) :
                mItemManager.getMetadataObserve(item.videoId, item.playlistId, 0, item.playlistParams)
                        .flatMap(mediaItemMetadata -> Observable.just(findPlaylistRow(mediaItemMetadata)));
     }
@@ -174,41 +180,50 @@ public class ChannelUploadsPresenter extends BasePresenter<ChannelUploadsView> i
         RxHelper.disposeActions(mUpdateAction, mScrollAction);
     }
 
-    private void continueVideoGroup(VideoGroup group) {
-        Log.d(TAG, "continueGroup: start continue group: " + group.getTitle());
-
+    private void continueGroup(VideoGroup group) {
         disposeActions();
 
-        // Channel item position restore may be called too early (Xiaomi)
         if (getView() == null) {
+            Log.e(TAG, "Can't continue group. The view is null.");
             return;
         }
+
+        if (group == null) {
+            Log.e(TAG, "Can't continue group. The group is null.");
+            return;
+        }
+
+        if (mLastScrollGroup == group.getMediaGroup()) {
+            Log.d(TAG, "Can't continue group. Another action is running.");
+            return;
+        }
+
+        mLastScrollGroup = group.getMediaGroup();
+
+        Log.d(TAG, "continueGroup: start continue group: " + group.getTitle());
 
         getView().showProgressBar(true);
 
         MediaGroup mediaGroup = group.getMediaGroup();
-
-        if (mediaGroup == null) {
-            Log.e(TAG, "Oops. Can't continue. MediaGroup is null.");
-            return;
-        }
 
         Observable<MediaGroup> continuation;
 
         if (mediaGroup.getType() == MediaGroup.TYPE_SUGGESTIONS) {
             continuation = mItemManager.continueGroupObserve(mediaGroup);
         } else {
-            continuation = mGroupManager.continueGroupObserve(mediaGroup);
+            continuation = mContentService.continueGroupObserve(mediaGroup);
         }
 
         mScrollAction = continuation
                 .subscribe(
-                        continueMediaGroup -> getView().update(VideoGroup.from(continueMediaGroup)),
+                        //continueMediaGroup -> getView().update(VideoGroup.from(continueMediaGroup)),
+                        continueMediaGroup -> getView().update(VideoGroup.from(group, continueMediaGroup)),
                         error -> {
                             Log.e(TAG, "continueGroup error: %s", error.getMessage());
                             if (getView() != null) {
                                 getView().showProgressBar(false);
                             }
+                            mLastScrollGroup = null;
                         },
                         () -> getView().showProgressBar(false)
                 );
@@ -224,7 +239,10 @@ public class ChannelUploadsPresenter extends BasePresenter<ChannelUploadsView> i
         mUpdateAction = group
                 .subscribe(
                         this::updateGrid,
-                        error -> Log.e(TAG, "updateGridHeader error: %s", error.getMessage()),
+                        error -> {
+                            Log.e(TAG, "updateGridHeader error: %s", error.getMessage());
+                            getView().showProgressBar(false);
+                        },
                         () -> getView().showProgressBar(false)
                 );
     }
@@ -233,7 +251,7 @@ public class ChannelUploadsPresenter extends BasePresenter<ChannelUploadsView> i
         if (getView() == null) { // starting from outside (e.g. MediaServiceManager)
             disposeActions();
             mVideoItem = null;
-            mMediaGroup = mediaGroup;
+            mRootGroup = mediaGroup;
             ViewManager.instance(getContext()).startView(ChannelUploadsView.class);
             return;
         }
@@ -255,7 +273,7 @@ public class ChannelUploadsPresenter extends BasePresenter<ChannelUploadsView> i
 
         disposeActions();
 
-        Observable<MediaGroup> group = mGroupManager.getGroupObserve(mediaItem);
+        Observable<MediaGroup> group = mContentService.getGroupObserve(mediaItem);
 
         mUpdateAction = group
                 .subscribe(
@@ -301,9 +319,9 @@ public class ChannelUploadsPresenter extends BasePresenter<ChannelUploadsView> i
         if (mVideoItem != null) {
             getView().clear();
             updateGrid(mVideoItem);
-        } else if (mMediaGroup != null) {
+        } else if (mRootGroup != null) {
             getView().clear();
-            updateGrid(mMediaGroup);
+            updateGrid(mRootGroup);
         }
     }
 }

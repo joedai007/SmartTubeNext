@@ -25,6 +25,7 @@ import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.FormatItem;
 import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.FormatItem.VideoPreset;
 import com.liskovsoft.smartyoutubetv2.common.misc.AppDataSourceManager;
 import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.prefs.ContentBlockData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.GeneralData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerTweaksData;
@@ -49,6 +50,10 @@ public class AppDialogUtil {
     private static final int AUDIO_DELAY_ID = 137;
     private static final int AUDIO_LANGUAGE_ID = 138;
     private static final int PLAYER_SCREEN_TIMEOUT_ID = 139;
+    private static final int PLAYER_SCREEN_DIMMING_ID = 140;
+    private static final int PLAYER_SPEED_LIST_ID = 141;
+    private static final int PLAYER_REMEMBER_SPEED_ID = 142;
+    private static final int PLAYER_SPEED_MISC_ID = 143;
     private static final int SUBTITLE_STYLES_ID = 45;
     private static final int SUBTITLE_SIZE_ID = 46;
     private static final int SUBTITLE_POSITION_ID = 47;
@@ -130,7 +135,7 @@ public class AppDialogUtil {
         }
 
         dialogPresenter.appendSingleButton(
-                UiOptionItem.from(context.getString(R.string.share_link) + " (QR)", optionItem -> {
+                UiOptionItem.from(context.getString(R.string.share_qr_link), optionItem -> {
                     dialogPresenter.closeDialog(); // pause bg video
                     if (video.videoId != null) {
                         Utils.openLink(context, Utils.toQrCodeLink(
@@ -222,7 +227,7 @@ public class AppDialogUtil {
                         generalData.getBackgroundPlaybackShortcut() == GeneralData.BACKGROUND_PLAYBACK_SHORTCUT_HOME_BACK));
         }
 
-        return OptionCategory.from(BACKGROUND_PLAYBACK_ID, OptionCategory.TYPE_RADIO, categoryTitle, options);
+        return OptionCategory.from(BACKGROUND_PLAYBACK_ID, OptionCategory.TYPE_RADIO_LIST, categoryTitle, options);
     }
 
     public static OptionCategory createVideoPresetsCategory(Context context) {
@@ -232,7 +237,7 @@ public class AppDialogUtil {
     public static OptionCategory createVideoPresetsCategory(Context context, Runnable onFormatSelected) {
         return OptionCategory.from(
                 VIDEO_PRESETS_ID,
-                OptionCategory.TYPE_RADIO,
+                OptionCategory.TYPE_RADIO_LIST,
                 context.getString(R.string.title_video_presets),
                 fromPresets(
                         context,
@@ -288,7 +293,7 @@ public class AppDialogUtil {
         optionItems.add(createVideoBufferOption(context, playerData, R.string.video_buffer_size_low, PlayerEngine.BUFFER_LOW, onBufferSelected));
         optionItems.add(createVideoBufferOption(context, playerData, R.string.video_buffer_size_med, PlayerEngine.BUFFER_MEDIUM, onBufferSelected));
         optionItems.add(createVideoBufferOption(context, playerData, R.string.video_buffer_size_high, PlayerEngine.BUFFER_HIGH, onBufferSelected));
-        return OptionCategory.from(VIDEO_BUFFER_ID, OptionCategory.TYPE_RADIO, videoBufferTitle, optionItems);
+        return OptionCategory.from(VIDEO_BUFFER_ID, OptionCategory.TYPE_RADIO_LIST, videoBufferTitle, optionItems);
     }
 
     private static OptionItem createVideoBufferOption(Context context, PlayerData playerData, int titleResId, int type, Runnable onBufferSelected) {
@@ -302,6 +307,10 @@ public class AppDialogUtil {
     }
 
     public static OptionCategory createAudioLanguageCategory(Context context, PlayerData playerData) {
+        return createAudioLanguageCategory(context, playerData, () -> {});
+    }
+
+    public static OptionCategory createAudioLanguageCategory(Context context, PlayerData playerData, Runnable onSetCallback) {
         String title = context.getString(R.string.audio_language);
 
         List<OptionItem> options = new ArrayList<>();
@@ -316,7 +325,10 @@ public class AppDialogUtil {
             }
 
             options.add(UiOptionItem.from(locale.getDisplayLanguage(),
-                    optionItem -> playerData.setAudioLanguage(languageCode),
+                    optionItem -> {
+                        playerData.setAudioLanguage(languageCode);
+                        onSetCallback.run();
+                    },
                     languageCode.equals(playerData.getAudioLanguage())));
             addedCodes.add(languageCode);
         }
@@ -325,7 +337,14 @@ public class AppDialogUtil {
         // Alphabetical order
         Collections.sort(options, (o1, o2) -> ((String) o1.getTitle()).compareTo((String) o2.getTitle()));
 
-        return OptionCategory.from(AUDIO_LANGUAGE_ID, OptionCategory.TYPE_RADIO, title, options);
+        options.add(0, UiOptionItem.from(context.getString(R.string.dialog_account_none),
+                optionItem -> {
+                    playerData.setAudioLanguage("");
+                    onSetCallback.run();
+                },
+                "".equals(playerData.getAudioLanguage())));
+
+        return OptionCategory.from(AUDIO_LANGUAGE_ID, OptionCategory.TYPE_RADIO_LIST, title, options);
     }
 
     public static OptionCategory createAudioShiftCategory(Context context, PlayerData playerData) {
@@ -346,7 +365,7 @@ public class AppDialogUtil {
                     delayMs == playerData.getAudioDelayMs()));
         }
 
-        return OptionCategory.from(AUDIO_DELAY_ID, OptionCategory.TYPE_RADIO, title, options);
+        return OptionCategory.from(AUDIO_DELAY_ID, OptionCategory.TYPE_RADIO_LIST, title, options);
     }
 
     public static OptionCategory createSubtitleStylesCategory(Context context, PlayerData playerData) {
@@ -354,13 +373,13 @@ public class AppDialogUtil {
 
         String subtitleStyleTitle = context.getString(R.string.subtitle_style);
 
-        return OptionCategory.from(SUBTITLE_STYLES_ID, OptionCategory.TYPE_RADIO, subtitleStyleTitle, fromSubtitleStyles(context, playerData, subtitleStyles));
+        return OptionCategory.from(SUBTITLE_STYLES_ID, OptionCategory.TYPE_RADIO_LIST, subtitleStyleTitle, fromSubtitleStyles(context, playerData, subtitleStyles));
     }
 
     public static OptionItem createSubtitleChannelOption(Context context, PlayerData playerData) {
         return UiOptionItem.from(context.getString(R.string.subtitle_remember),
-                optionItem -> playerData.enableSubtitlesForChannel(optionItem.isSelected()),
-                playerData.isSubtitlesForChannelEnabled()
+                optionItem -> playerData.enableSubtitlesPerChannel(optionItem.isSelected()),
+                playerData.isSubtitlesPerChannelEnabled()
         );
     }
 
@@ -393,7 +412,7 @@ public class AppDialogUtil {
                     Helpers.floatEquals(scale, playerData.getSubtitleScale())));
         }
 
-        return OptionCategory.from(SUBTITLE_SIZE_ID, OptionCategory.TYPE_RADIO, context.getString(R.string.subtitle_scale), options);
+        return OptionCategory.from(SUBTITLE_SIZE_ID, OptionCategory.TYPE_RADIO_LIST, context.getString(R.string.subtitle_scale), options);
     }
 
     public static OptionCategory createSubtitlePositionCategory(Context context, PlayerData playerData) {
@@ -409,7 +428,7 @@ public class AppDialogUtil {
                     Helpers.floatEquals(position, playerData.getSubtitlePosition())));
         }
 
-        return OptionCategory.from(SUBTITLE_POSITION_ID, OptionCategory.TYPE_RADIO, context.getString(R.string.subtitle_position), options);
+        return OptionCategory.from(SUBTITLE_POSITION_ID, OptionCategory.TYPE_RADIO_LIST, context.getString(R.string.subtitle_position), options);
     }
 
     public static OptionCategory createVideoZoomCategory(Context context, PlayerData playerData) {
@@ -435,19 +454,27 @@ public class AppDialogUtil {
         }
 
         // Zoom above 100% has centering problems with 2K-4K videos
-        for (int zoomPercents : Helpers.range(50, 300, 5)) {
-            options.add(UiOptionItem.from(String.format("%s%%", zoomPercents),
-                    optionItem -> {
-                        playerData.setVideoZoom(zoomPercents);
-                        playerData.setVideoZoomMode(PlayerEngine.ZOOM_MODE_DEFAULT);
-                        onSelectZoomMode.run();
-                    },
-                    playerData.getVideoZoom() == zoomPercents));
+        int[][] zoomRanges = {
+            Helpers.range(50, 95, 5),  // from 50 to 95 in steps of 5
+            Helpers.range(96, 100, 1), // from 96 to 100 in steps of 1
+            Helpers.range(105, 300, 5) // from 105 to 300 in steps of 5
+        };
+
+        for (int[] zoomRange : zoomRanges) {
+            for (int zoomPercents : zoomRange) {
+                options.add(UiOptionItem.from(String.format("%s%%", zoomPercents),
+                        optionItem -> {
+                            playerData.setVideoZoom(zoomPercents);
+                            playerData.setVideoZoomMode(PlayerEngine.ZOOM_MODE_DEFAULT);
+                            onSelectZoomMode.run();
+                        },
+                        playerData.getVideoZoom() == zoomPercents));
+            }
         }
 
         String videoZoomTitle = context.getString(R.string.video_zoom);
 
-        return OptionCategory.from(SUBTITLE_STYLES_ID, OptionCategory.TYPE_RADIO, videoZoomTitle, options);
+        return OptionCategory.from(SUBTITLE_STYLES_ID, OptionCategory.TYPE_RADIO_LIST, videoZoomTitle, options);
     }
 
     public static OptionCategory createVideoAspectCategory(Context context, PlayerData playerData, Runnable onSelectAspectMode) {
@@ -476,7 +503,7 @@ public class AppDialogUtil {
 
         String videoZoomTitle = context.getString(R.string.video_aspect);
 
-        return OptionCategory.from(SUBTITLE_STYLES_ID, OptionCategory.TYPE_RADIO, videoZoomTitle, options);
+        return OptionCategory.from(SUBTITLE_STYLES_ID, OptionCategory.TYPE_RADIO_LIST, videoZoomTitle, options);
     }
 
     public static OptionCategory createVideoRotateCategory(Context context, PlayerData playerData, Runnable onRotate) {
@@ -492,21 +519,148 @@ public class AppDialogUtil {
 
         String videoRotateTitle = context.getString(R.string.video_rotate);
 
-        return OptionCategory.from(SUBTITLE_STYLES_ID, OptionCategory.TYPE_RADIO, videoRotateTitle, options);
+        return OptionCategory.from(SUBTITLE_STYLES_ID, OptionCategory.TYPE_RADIO_LIST, videoRotateTitle, options);
     }
 
-    public static OptionCategory createPlayerScreenOffTimeoutCategory(Context context, PlayerTweaksData data) {
+    public static OptionCategory createPlayerScreenOffDimmingCategory(Context context, PlayerTweaksData data, Runnable onApply) {
         List<OptionItem> options = new ArrayList<>();
 
-        for (int timoutSec : Helpers.range(0, 10, 1)) {
-            options.add(UiOptionItem.from(String.format("%s sec", timoutSec),
-                    optionItem -> data.setScreenOffTimeoutSec(timoutSec),
-                    data.getScreenOffTimeoutSec() == timoutSec));
+        for (int dimPercents : Helpers.range(10, 100, 10)) {
+            options.add(UiOptionItem.from(dimPercents + "%",
+                    optionItem -> {
+                        data.setScreenOffDimmingPercents(dimPercents);
+                        if (onApply != null) {
+                            onApply.run();
+                        }
+                    },
+                    data.getScreenOffDimmingPercents() == dimPercents));
+        }
+
+        String title = context.getString(R.string.player_screen_off_dimming);
+
+        return OptionCategory.from(PLAYER_SCREEN_DIMMING_ID, OptionCategory.TYPE_RADIO_LIST, title, options);
+    }
+
+    public static OptionCategory createPlayerScreenOffTimeoutCategory(Context context, PlayerTweaksData data, Runnable onApply) {
+        List<OptionItem> options = new ArrayList<>();
+
+        for (int timeoutSec : Helpers.range(0, 10, 1)) {
+            options.add(UiOptionItem.from(timeoutSec == 0 ? context.getString(R.string.option_never) : context.getString(R.string.ui_hide_timeout_sec, timeoutSec),
+                    optionItem -> {
+                        data.setScreenOffTimeoutSec(timeoutSec);
+                        if (onApply != null) {
+                            onApply.run();
+                        }
+                    },
+                    data.getScreenOffTimeoutSec() == timeoutSec));
+        }
+
+        for (int min : Helpers.range(30, 180, 30)) {
+            int timeoutSec = min * 60;
+            options.add(UiOptionItem.from(
+                    context.getString(R.string.screen_dimming_timeout_min, min),
+                    option -> {
+                        data.setScreenOffTimeoutSec(timeoutSec);
+                        if (onApply != null) {
+                            onApply.run();
+                        }
+                    },
+                    data.getScreenOffTimeoutSec() == timeoutSec));
         }
 
         String title = context.getString(R.string.player_screen_off_timeout);
 
-        return OptionCategory.from(PLAYER_SCREEN_TIMEOUT_ID, OptionCategory.TYPE_RADIO, title, options);
+        return OptionCategory.from(PLAYER_SCREEN_TIMEOUT_ID, OptionCategory.TYPE_RADIO_LIST, title, options);
+    }
+
+    public static OptionItem createExcludeFromContentBlockButton(
+            Context context,  Video original, MediaServiceManager serviceManager, Runnable onClose) {
+        return UiOptionItem.from(
+                context.getString(
+                        ContentBlockData.instance(context).isChannelExcluded(original.channelId) ?
+                                R.string.content_block_stop_excluding_channel :
+                                R.string.content_block_exclude_channel),
+                optionItem -> {
+                    if (original.hasChannel()) {
+                        ContentBlockData.instance(context).toggleExcludeChannel(original.channelId);
+                        if (onClose != null) {
+                            onClose.run();
+                        }
+                    } else {
+                        MessageHelpers.showMessage(context, R.string.wait_data_loading);
+
+                        serviceManager.loadMetadata(
+                                original,
+                                metadata -> {
+                                    original.sync(metadata);
+                                    ContentBlockData.instance(context).excludeChannel(original.channelId);
+                                    if (onClose != null) {
+                                        onClose.run();
+                                    }
+                                }
+                        );
+                    }
+                });
+    }
+
+    public static OptionCategory createSpeedListCategory(Context context, PlayerManager playbackController, PlayerData playerData) {
+        List<OptionItem> items = new ArrayList<>();
+
+        for (float speed : PlayerTweaksData.instance(context).isLongSpeedListEnabled() ? Utils.SPEED_LIST_LONG : Utils.SPEED_LIST_SHORT) {
+            items.add(UiOptionItem.from(
+                    String.valueOf(speed),
+                    optionItem -> {
+                        if (playbackController != null) {
+                            //playerData.setSpeed(playbackController.getVideo().channelId, speed);
+                            playbackController.setSpeed(speed);
+                        } else {
+                            playerData.setSpeed(speed);
+                        }
+                    },
+                    (playbackController != null ? playbackController.getSpeed() : playerData.getSpeed()) == speed));
+        }
+
+        return OptionCategory.from(PLAYER_SPEED_LIST_ID, OptionCategory.TYPE_RADIO_LIST, context.getString(R.string.video_speed), items);
+    }
+
+    public static OptionCategory createRememberSpeedCategory(Context context, PlayerData playerData) {
+        List<OptionItem> options = new ArrayList<>();
+
+        options.add(UiOptionItem.from(context.getString(R.string.player_remember_speed_none),
+                optionItem -> {
+                    playerData.enableAllSpeed(false);
+                    playerData.enableSpeedPerVideo(false);
+                    playerData.enableSpeedPerChannel(false);
+                },
+                !playerData.isAllSpeedEnabled() && !playerData.isSpeedPerVideoEnabled()));
+
+        options.add(UiOptionItem.from(context.getString(R.string.player_remember_speed_all),
+                optionItem -> playerData.enableAllSpeed(true),
+                playerData.isAllSpeedEnabled()));
+
+        options.add(UiOptionItem.from(context.getString(R.string.player_remember_speed_each),
+                optionItem -> playerData.enableSpeedPerVideo(true),
+                playerData.isSpeedPerVideoEnabled()));
+
+        options.add(UiOptionItem.from(context.getString(R.string.player_speed_per_channel),
+                option -> playerData.enableSpeedPerChannel(option.isSelected()),
+                playerData.isSpeedPerChannelEnabled()));
+
+        String title = context.getString(R.string.player_remember_speed);
+
+        return OptionCategory.from(PLAYER_REMEMBER_SPEED_ID, OptionCategory.TYPE_RADIO_LIST, title, options);
+    }
+
+    public static OptionCategory createSpeedMiscCategory(Context context, PlayerTweaksData playerTweaksData) {
+        List<OptionItem> options = new ArrayList<>();
+
+        options.add(UiOptionItem.from(context.getString(R.string.player_long_speed_list),
+                option -> playerTweaksData.enableLongSpeedList(option.isSelected()),
+                playerTweaksData.isLongSpeedListEnabled()));
+
+        String title = context.getString(R.string.player_other);
+
+        return OptionCategory.from(PLAYER_SPEED_MISC_ID, OptionCategory.TYPE_CHECKBOX_LIST, title, options);
     }
 
     public static void showConfirmationDialog(Context context, String title, Runnable onConfirm) {
@@ -553,21 +707,6 @@ public class AppDialogUtil {
         }
 
         dialogPresenter.appendRadioCategory(context.getString(R.string.seek_interval), options);
-    }
-
-    public static void appendSpeedDialogItems(Context context, AppDialogPresenter settingsPresenter, PlayerManager playbackController, PlayerData playerData) {
-        List<OptionItem> items = new ArrayList<>();
-
-        for (float speed : PlayerTweaksData.instance(context).isLongSpeedListEnabled() ? Utils.SPEED_LIST_LONG : Utils.SPEED_LIST_SHORT) {
-            items.add(UiOptionItem.from(
-                    String.valueOf(speed),
-                    optionItem -> {
-                        playerData.setSpeed(speed);
-                        playbackController.setSpeed(speed);
-                    },
-                    playbackController.getSpeed() == speed));
-        }
-        settingsPresenter.appendRadioCategory(context.getString(R.string.video_speed), items);
     }
 
     public static void showAddToPlaylistDialog(Context context, Video video, VideoMenuCallback callback) {
@@ -641,7 +780,8 @@ public class AppDialogUtil {
             editObserve = itemManager.removeFromPlaylistObserve(playlistId, video.videoId);
         }
 
-        Disposable addRemoveAction = RxHelper.execute(editObserve); // ignore results (do the work in the background)
+        // Handle error: Maximum playlist size exceeded (> 5000 items)
+        RxHelper.execute(editObserve, error -> MessageHelpers.showLongMessage(context, error.getMessage()));
     }
 
     public static void showPlaylistOrderDialog(Context context, Video video, Runnable onClose) {
@@ -679,7 +819,7 @@ public class AppDialogUtil {
                 if (optionItem.isSelected()) {
                     RxHelper.execute(
                             YouTubeMediaItemService.instance().setPlaylistOrderObserve(playlistId, pair[1]),
-                            () -> MessageHelpers.showMessage(context, R.string.owned_playlist_warning),
+                            (error) -> MessageHelpers.showMessage(context, R.string.owned_playlist_warning),
                             () -> {
                                 generalData.setPlaylistOrder(playlistId, pair[1]);
                                 ViewManager.instance(context).refreshCurrentView();

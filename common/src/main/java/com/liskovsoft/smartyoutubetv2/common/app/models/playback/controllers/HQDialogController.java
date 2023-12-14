@@ -37,8 +37,8 @@ public class HQDialogController extends PlayerEventListenerHelper {
 
     @Override
     public void onInit() {
-        mPlayerData = PlayerData.instance(getActivity());
-        mAppDialogPresenter = AppDialogPresenter.instance(getActivity());
+        mPlayerData = PlayerData.instance(getContext());
+        mAppDialogPresenter = AppDialogPresenter.instance(getContext());
     }
 
     @Override
@@ -51,30 +51,31 @@ public class HQDialogController extends PlayerEventListenerHelper {
         addQualityCategories();
         addVideoBufferCategory();
         addPresetsCategory();
+        addAudioLanguage();
         addAudioDelayCategory();
         //addBackgroundPlaybackCategory();
 
         appendOptions(mCategoriesInt);
         appendOptions(mCategories);
 
-        mAppDialogPresenter.showDialog(getActivity().getString(R.string.playback_settings), this::onDialogHide);
+        mAppDialogPresenter.showDialog(getContext().getString(R.string.playback_settings), this::onDialogHide);
     }
 
     private void addQualityCategories() {
         List<FormatItem> videoFormats = getPlayer().getVideoFormats();
-        String videoFormatsTitle = getActivity().getString(R.string.title_video_formats);
+        String videoFormatsTitle = getContext().getString(R.string.title_video_formats);
 
         List<FormatItem> audioFormats = getPlayer().getAudioFormats();
-        String audioFormatsTitle = getActivity().getString(R.string.title_audio_formats);
+        String audioFormatsTitle = getContext().getString(R.string.title_audio_formats);
 
         addCategoryInt(OptionCategory.from(
                 VIDEO_FORMATS_ID,
-                OptionCategory.TYPE_RADIO,
+                OptionCategory.TYPE_RADIO_LIST,
                 videoFormatsTitle,
                 UiOptionItem.from(videoFormats, this::selectFormatOption)));
         addCategoryInt(OptionCategory.from(
                 AUDIO_FORMATS_ID,
-                OptionCategory.TYPE_RADIO,
+                OptionCategory.TYPE_RADIO_LIST,
                 audioFormatsTitle,
                 UiOptionItem.from(audioFormats, this::selectFormatOption)));
     }
@@ -85,7 +86,7 @@ public class HQDialogController extends PlayerEventListenerHelper {
 
         if (mPlayerData.getFormat(formatItem.getType()).isPreset()) {
             // Preset currently active. Show warning about format reset.
-            MessageHelpers.showMessage(getActivity(), R.string.video_preset_enabled);
+            MessageHelpers.showMessage(getContext(), R.string.video_preset_enabled);
         }
 
         if (!getPlayer().containsMedia()) {
@@ -99,12 +100,17 @@ public class HQDialogController extends PlayerEventListenerHelper {
     }
 
     private void addVideoBufferCategory() {
-        addCategoryInt(AppDialogUtil.createVideoBufferCategory(getActivity(), mPlayerData,
+        addCategoryInt(AppDialogUtil.createVideoBufferCategory(getContext(), mPlayerData,
                 () -> getPlayer().restartEngine()));
     }
 
     private void addAudioDelayCategory() {
-        addCategoryInt(AppDialogUtil.createAudioShiftCategory(getActivity(), mPlayerData,
+        addCategoryInt(AppDialogUtil.createAudioShiftCategory(getContext(), mPlayerData,
+                () -> getPlayer().restartEngine()));
+    }
+
+    private void addAudioLanguage() {
+        addCategoryInt(AppDialogUtil.createAudioLanguageCategory(getContext(), mPlayerData,
                 () -> getPlayer().restartEngine()));
     }
 
@@ -117,7 +123,7 @@ public class HQDialogController extends PlayerEventListenerHelper {
     }
 
     private void updateBackgroundPlayback() {
-        ViewManager.instance(getActivity()).blockTop(null);
+        ViewManager.instance(getContext()).blockTop(null);
 
         if (getPlayer() != null) {
             getPlayer().setBackgroundMode(mPlayerData.getBackgroundMode());
@@ -126,14 +132,14 @@ public class HQDialogController extends PlayerEventListenerHelper {
 
     private void addBackgroundPlaybackCategory() {
         OptionCategory category =
-                AppDialogUtil.createBackgroundPlaybackCategory(getActivity(), mPlayerData, GeneralData.instance(getActivity()), this::updateBackgroundPlayback);
+                AppDialogUtil.createBackgroundPlaybackCategory(getContext(), mPlayerData, GeneralData.instance(getContext()), this::updateBackgroundPlayback);
 
         addCategoryInt(category);
     }
 
     private void addPresetsCategory() {
         addCategoryInt(AppDialogUtil.createVideoPresetsCategory(
-                getActivity(), () -> {
+                getContext(), () -> {
                     if (getPlayer() == null) {
                         return;
                     }
@@ -177,23 +183,7 @@ public class HQDialogController extends PlayerEventListenerHelper {
 
     private void appendOptions(Map<Integer, OptionCategory> categories) {
         for (OptionCategory category : categories.values()) {
-            switch (category.type) {
-                case OptionCategory.TYPE_RADIO:
-                    mAppDialogPresenter.appendRadioCategory(category.title, category.options);
-                    break;
-                case OptionCategory.TYPE_CHECKED:
-                    mAppDialogPresenter.appendCheckedCategory(category.title, category.options);
-                    break;
-                case OptionCategory.TYPE_STRING:
-                    mAppDialogPresenter.appendStringsCategory(category.title, category.options);
-                    break;
-                case OptionCategory.TYPE_LONG_TEXT:
-                    mAppDialogPresenter.appendLongTextCategory(category.title, category.option);
-                    break;
-                case OptionCategory.TYPE_SINGLE:
-                    mAppDialogPresenter.appendSingleSwitch(category.option);
-                    break;
-            }
+            mAppDialogPresenter.appendCategory(category);
         }
     }
 }
