@@ -3,6 +3,7 @@ package com.liskovsoft.smartyoutubetv2.common.prefs;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import com.liskovsoft.sharedutils.helpers.Helpers;
+import com.liskovsoft.smartyoutubetv2.common.prefs.common.DataChangeBase;
 
 public class RemoteControlData extends DataChangeBase {
     private static final String DEVICE_LINK_DATA = "device_link_data";
@@ -70,7 +71,7 @@ public class RemoteControlData extends DataChangeBase {
     private void restoreState() {
         String data = mAppPrefs.getData(DEVICE_LINK_DATA);
 
-        String[] split = Helpers.splitObjectLegacy(data);
+        String[] split = Helpers.splitObject(data);
 
         // null
         // null

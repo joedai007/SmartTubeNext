@@ -20,8 +20,10 @@ import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.menu.VideoMe
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.interfaces.VideoGroupPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.views.ChannelView;
 import com.liskovsoft.smartyoutubetv2.common.app.views.ViewManager;
+import com.liskovsoft.smartyoutubetv2.common.misc.DeArrowProcessor;
 import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
 import com.liskovsoft.sharedutils.rx.RxHelper;
+import com.liskovsoft.smartyoutubetv2.common.prefs.GeneralData;
 import com.liskovsoft.smartyoutubetv2.common.utils.LoadingManager;
 import com.liskovsoft.youtubeapi.service.YouTubeHubService;
 import io.reactivex.Observable;
@@ -36,12 +38,13 @@ public class ChannelPresenter extends BasePresenter<ChannelView> implements Vide
     private static ChannelPresenter sInstance;
     private final HubService mHubService;
     private final MediaServiceManager mServiceManager;
+    private final DeArrowProcessor mDeArrowProcessor;
     private String mChannelId;
     private final List<List<MediaGroup>> mPendingGroups = new ArrayList<>();
     private Disposable mUpdateAction;
     private Disposable mScrollAction;
-    private MediaGroup mLastScrollGroup;
     private int mSortIdx;
+    private Video mChannel;
 
     private interface OnChannelId {
         void onChannelId(String channelId);
@@ -55,6 +58,7 @@ public class ChannelPresenter extends BasePresenter<ChannelView> implements Vide
         super(context);
         mHubService = YouTubeHubService.instance();
         mServiceManager = MediaServiceManager.instance();
+        mDeArrowProcessor = new DeArrowProcessor(getContext(), this::syncItem);
     }
 
     public static ChannelPresenter instance(Context context) {
@@ -130,11 +134,7 @@ public class ChannelPresenter extends BasePresenter<ChannelView> implements Vide
 
         Log.d(TAG, "onScrollEnd: Group title: " + group.getTitle());
 
-        boolean scrollInProgress = mScrollAction != null && !mScrollAction.isDisposed();
-
-        if (!scrollInProgress) {
-            continueGroup(group);
-        }
+        continueGroup(group);
     }
 
     @Override
@@ -151,6 +151,7 @@ public class ChannelPresenter extends BasePresenter<ChannelView> implements Vide
     }
 
     public void openChannel(Video item) {
+        mChannel = item;
         extractChannelId(item, this::openChannel);
     }
 
@@ -173,6 +174,22 @@ public class ChannelPresenter extends BasePresenter<ChannelView> implements Vide
         ViewManager.instance(getContext()).startView(ChannelView.class);
     }
 
+    public String getChannelId() {
+        return mChannel != null ? mChannel.channelId : mChannelId;
+    }
+
+    public void setChannelId(String channelId) {
+        mChannelId = channelId;
+    }
+
+    public Video getChannel() {
+        return mChannel;
+    }
+
+    public void setChannel(Video channel) {
+        mChannel = channel;
+    }
+
     private void disposeActions() {
         RxHelper.disposeActions(mUpdateAction, mScrollAction);
         mServiceManager.disposeActions();
@@ -188,7 +205,7 @@ public class ChannelPresenter extends BasePresenter<ChannelView> implements Vide
 
         getView().showProgressBar(true);
 
-        Observable<List<MediaGroup>> channelObserve = mHubService.getContentService().getChannelObserve(channelId);
+        Observable<List<MediaGroup>> channelObserve = obtainChannelObservable(channelId);
 
         mUpdateAction = channelObserve
                 .subscribe(
@@ -200,17 +217,21 @@ public class ChannelPresenter extends BasePresenter<ChannelView> implements Vide
                  );
     }
 
+    public Observable<List<MediaGroup>> obtainChannelObservable(String channelId) {
+        return GeneralData.instance(getContext()).isOldChannelLookEnabled() ?
+                mHubService.getContentService().getChannelV1Observe(channelId) :  mHubService.getContentService().getChannelObserve(channelId);
+    }
+
     public void updateRows(List<MediaGroup> mediaGroups) {
         if (getView() == null) { // starting from outside (e.g. MediaServiceManager)
             disposeActions();
             mChannelId = null;
             mPendingGroups.add(mediaGroups);
-            ViewManager.instance(getContext()).startView(ChannelView.class);
             return;
         }
 
-        if (ViewManager.instance(getContext()).getTopView() != ChannelView.class) {
-            ViewManager.instance(getContext()).startView(ChannelView.class);
+        if (GeneralData.instance(getContext()).isOldChannelLookEnabled()) {
+            moveToTopIfNeeded(mediaGroups);
         }
 
         for (MediaGroup mediaGroup : mediaGroups) {
@@ -219,13 +240,21 @@ public class ChannelPresenter extends BasePresenter<ChannelView> implements Vide
                 continue;
             }
 
-            getView().update(VideoGroup.from(mediaGroup));
+            VideoGroup group = VideoGroup.from(mediaGroup);
+            getView().update(group);
+            mDeArrowProcessor.process(group);
         }
 
         getView().showProgressBar(false);
     }
 
     private void continueGroup(VideoGroup group) {
+        boolean scrollInProgress = mScrollAction != null && !mScrollAction.isDisposed();
+
+        if (scrollInProgress) {
+            return;
+        }
+
         if (getView() == null) {
             Log.e(TAG, "Can't continue group. The view is null.");
             return;
@@ -235,13 +264,6 @@ public class ChannelPresenter extends BasePresenter<ChannelView> implements Vide
             Log.e(TAG, "Can't continue group. The group is null.");
             return;
         }
-
-        if (mLastScrollGroup == group.getMediaGroup()) {
-            Log.d(TAG, "Can't continue group. Another action is running.");
-            return;
-        }
-
-        mLastScrollGroup = group.getMediaGroup();
 
         Log.d(TAG, "continueGroup: start continue group: " + group.getTitle());
 
@@ -253,17 +275,29 @@ public class ChannelPresenter extends BasePresenter<ChannelView> implements Vide
 
         mScrollAction = contentService.continueGroupObserve(mediaGroup)
                 .subscribe(
-                        //continueMediaGroup -> getView().update(VideoGroup.from(continueMediaGroup)),
-                        continueMediaGroup -> getView().update(VideoGroup.from(group, continueMediaGroup)),
+                        continueMediaGroup -> {
+                            VideoGroup newGroup = VideoGroup.from(group, continueMediaGroup);
+                            getView().update(newGroup);
+                            mDeArrowProcessor.process(newGroup);
+                        },
                         error -> {
                             Log.e(TAG, "continueGroup error: %s", error.getMessage());
                             if (getView() != null) {
                                 getView().showProgressBar(false);
                             }
-                            mLastScrollGroup = null;
                         },
                         () -> getView().showProgressBar(false)
                 );
+    }
+
+    /**
+     * Sort channel content: move Uploads on top.
+     */
+    private void moveToTopIfNeeded(List<MediaGroup> mediaGroups) {
+        moveToTop(mediaGroups, R.string.playlists_row_name);
+        moveToTop(mediaGroups, R.string.popular_uploads_row_name);
+        moveToTop(mediaGroups, R.string.uploads_row_name);
+        moveToTop(mediaGroups, R.string.live_now_row_name);
     }
 
     private void moveToTop(List<MediaGroup> mediaGroups, int rowNameResId) {
@@ -284,6 +318,8 @@ public class ChannelPresenter extends BasePresenter<ChannelView> implements Vide
         if (getView() != null) {
             getView().clear();
         }
+        mChannel = null;
+        mChannelId = null;
     }
 
     private void extractChannelId(Video item, OnChannelId callback) {
@@ -323,25 +359,8 @@ public class ChannelPresenter extends BasePresenter<ChannelView> implements Vide
         }
     }
 
-    public void obtainUploadsRowObservable(Video item, OnUploadsRow callback) {
-        extractChannelId(item, channelId -> {
-            if (channelId == null) {
-                return;
-            }
-
-            callback.onUploadsRow(mHubService.getContentService().getChannelObserve(channelId).map(mediaGroups -> {
-                moveToTop(mediaGroups, R.string.uploads_row_name);
-                return mediaGroups.get(0);
-            }));
-        });
-    }
-
     public void onSearchSettingsClicked() {
-        if (mChannelId == null) {
-            return;
-        }
-
-        Observable<List<MediaGroup>> sorting = mHubService.getContentService().getChannelSortingObserve(mChannelId);
+        Observable<List<MediaGroup>> sorting = mHubService.getContentService().getChannelSortingObserve(getChannelId());
         Disposable result = sorting.subscribe(
                 items -> {
                     AppDialogPresenter dialogPresenter = AppDialogPresenter.instance(getContext());
@@ -371,11 +390,7 @@ public class ChannelPresenter extends BasePresenter<ChannelView> implements Vide
     }
 
     public boolean onSearchSubmit(String query) {
-        if (mChannelId == null) {
-            return false;
-        }
-
-        Observable<MediaGroup> search = mHubService.getContentService().getChannelSearchObserve(mChannelId, query);
+        Observable<MediaGroup> search = mHubService.getContentService().getChannelSearchObserve(getChannelId(), query);
         Disposable result = search.subscribe(
                 items -> {
                     VideoGroup update = VideoGroup.from(items);
@@ -389,7 +404,7 @@ public class ChannelPresenter extends BasePresenter<ChannelView> implements Vide
                     update.setPosition(0);
                     update.setAction(VideoGroup.ACTION_REPLACE);
                     getView().update(update);
-                    //getView().setPosition(1);
+                    getView().setPosition(1);
                 }
         );
 

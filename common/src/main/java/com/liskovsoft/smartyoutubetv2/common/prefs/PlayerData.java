@@ -4,18 +4,22 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.os.Build;
 import android.os.Build.VERSION;
+
 import androidx.annotation.NonNull;
+
 import com.google.android.exoplayer2.text.CaptionStyleCompat;
 import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.sharedutils.locale.LocaleUtility;
 import com.liskovsoft.smartyoutubetv2.common.R;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.manager.PlayerEngine;
+import com.liskovsoft.smartyoutubetv2.common.app.models.playback.manager.PlayerEngineConstants;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.manager.PlayerUI;
 import com.liskovsoft.smartyoutubetv2.common.exoplayer.other.SubtitleManager.SubtitleStyle;
 import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.ExoFormatItem;
 import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.FormatItem;
 import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.track.MediaTrack;
 import com.liskovsoft.smartyoutubetv2.common.prefs.AppPrefs.ProfileChangeListener;
+import com.liskovsoft.smartyoutubetv2.common.prefs.common.DataChangeBase;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class PlayerData extends DataChangeBase implements ProfileChangeListener {
+public class PlayerData extends DataChangeBase implements PlayerEngineConstants, ProfileChangeListener {
     private static final String VIDEO_PLAYER_DATA = "video_player_data";
     public static final int ONLY_UI = 0;
     public static final int UI_AND_PAUSE = 1;
@@ -39,8 +43,7 @@ public class PlayerData extends DataChangeBase implements ProfileChangeListener 
     private static PlayerData sInstance;
     private final AppPrefs mPrefs;
     private int mOKButtonBehavior;
-    private int mUIHideTimeoutSec;
-    private boolean mIsAbsoluteDateEnabled;
+    private int mUiHideTimeoutSec;
     private boolean mIsSeekConfirmPauseEnabled;
     private boolean mIsClockEnabled;
     private boolean mIsGlobalClockEnabled;
@@ -91,6 +94,7 @@ public class PlayerData extends DataChangeBase implements ProfileChangeListener 
     private boolean mIsSubtitlesPerChannelEnabled;
     private boolean mIsSpeedPerChannelEnabled;
     private final Map<String, SpeedItem> mSpeeds = new HashMap<>();
+    private float mPitch;
 
     private static class SpeedItem {
         private static final String OBJ_DELIM = "&vi;";
@@ -145,22 +149,13 @@ public class PlayerData extends DataChangeBase implements ProfileChangeListener 
         return mOKButtonBehavior;
     }
 
-    public void setUIHideTimoutSec(int timoutSec) {
-        mUIHideTimeoutSec = timoutSec;
+    public void setUiHideTimeoutSec(int timeoutSec) {
+        mUiHideTimeoutSec = timeoutSec;
         persistState();
     }
 
-    public int getUIHideTimoutSec() {
-        return mUIHideTimeoutSec;
-    }
-
-    public void enableAbsoluteDate(boolean show) {
-        mIsAbsoluteDateEnabled = show;
-        persistState();
-    }
-
-    public boolean isAbsoluteDateEnabled() {
-        return mIsAbsoluteDateEnabled;
+    public int getUiHideTimeoutSec() {
+        return mUiHideTimeoutSec;
     }
 
     public void setSeekPreviewMode(int mode) {
@@ -371,7 +366,7 @@ public class PlayerData extends DataChangeBase implements ProfileChangeListener 
                 break;
         }
 
-        MediaTrack track = ExoFormatItem.toMediaTrack(format);
+        MediaTrack track = FormatItem.toMediaTrack(format);
         if (track != null) {
             track.isSaved = true;
         }
@@ -592,6 +587,15 @@ public class PlayerData extends DataChangeBase implements ProfileChangeListener 
         persistState();
     }
 
+    public float getPitch() {
+        return mPitch;
+    }
+
+    public void setPitch(float pitch) {
+        mPitch = pitch;
+        persistState();
+    }
+
     public String getAudioLanguage() {
         return mAudioLanguage;
     }
@@ -706,11 +710,11 @@ public class PlayerData extends DataChangeBase implements ProfileChangeListener 
     private void restoreState() {
         String data = mPrefs.getProfileData(VIDEO_PLAYER_DATA);
 
-        String[] split = Helpers.splitObjectLegacy(data);
+        String[] split = Helpers.splitObject(data);
 
         mOKButtonBehavior = Helpers.parseInt(split, 0, ONLY_UI);
-        mUIHideTimeoutSec = Helpers.parseInt(split, 1, 3);
-        mIsAbsoluteDateEnabled = Helpers.parseBoolean(split, 2, false);
+        mUiHideTimeoutSec = Helpers.parseInt(split, 1, 3);
+        // mIsAbsoluteDateEnabled
         mSeekPreviewMode = Helpers.parseInt(split, 3, SEEK_PREVIEW_SINGLE);
         mIsSeekConfirmPauseEnabled = Helpers.parseBoolean(split, 4, false);
         mIsClockEnabled = Helpers.parseBoolean(split, 5, true);
@@ -765,6 +769,7 @@ public class PlayerData extends DataChangeBase implements ProfileChangeListener 
         mIsSubtitlesPerChannelEnabled = Helpers.parseBoolean(split, 55, true);
         mIsSpeedPerChannelEnabled = Helpers.parseBoolean(split, 56, true);
         String[] speeds = Helpers.parseArray(split, 57);
+        mPitch = Helpers.parseFloat(split, 58, 1.0f);
 
         if (speeds != null) {
             for (String speedSpec : speeds) {
@@ -792,7 +797,7 @@ public class PlayerData extends DataChangeBase implements ProfileChangeListener 
     protected void persistState() {
         String enabledSubtitles = Helpers.mergeArray(mEnabledSubtitlesPerChannel.toArray());
 
-        mPrefs.setProfileData(VIDEO_PLAYER_DATA, Helpers.mergeObject(mOKButtonBehavior, mUIHideTimeoutSec, mIsAbsoluteDateEnabled,
+        mPrefs.setProfileData(VIDEO_PLAYER_DATA, Helpers.mergeObject(mOKButtonBehavior, mUiHideTimeoutSec, null,
                 mSeekPreviewMode, mIsSeekConfirmPauseEnabled,
                 mIsClockEnabled, mIsRemainingTimeEnabled, mBackgroundMode, null, // afrData was there
                 Helpers.toString(mVideoFormat), Helpers.toString(mAudioFormat), Helpers.toString(mSubtitleFormat),
@@ -804,7 +809,7 @@ public class PlayerData extends DataChangeBase implements ProfileChangeListener 
                 mStartSeekIncrementMs, null, mSubtitleScale, mPlayerVolume, mIsTooltipsEnabled, mSubtitlePosition, mIsNumberKeySeekEnabled,
                 mIsSkip24RateEnabled, mAfrPauseMs, mIsLiveChatEnabled, Helpers.toString(mLastSubtitleFormat), mLastSpeed, mVideoRotation,
                 mVideoZoom, mRepeatMode, mAudioLanguage, mSubtitleLanguage, enabledSubtitles, mIsSubtitlesPerChannelEnabled,
-                mIsSpeedPerChannelEnabled, Helpers.mergeArray(mSpeeds.values().toArray())
+                mIsSpeedPerChannelEnabled, Helpers.mergeArray(mSpeeds.values().toArray()), mPitch
         ));
 
         super.persistState();

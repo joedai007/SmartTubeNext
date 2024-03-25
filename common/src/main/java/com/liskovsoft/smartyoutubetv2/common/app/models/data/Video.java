@@ -1,9 +1,12 @@
 package com.liskovsoft.smartyoutubetv2.common.app.models.data;
 
 import android.content.Context;
+import android.text.TextUtils;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.liskovsoft.mediaserviceinterfaces.data.ChapterItem;
+import com.liskovsoft.mediaserviceinterfaces.data.DislikeData;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItem;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItemFormatInfo;
@@ -26,14 +29,14 @@ import java.util.List;
  */
 public final class Video {
     public static final String TERTIARY_TEXT_DELIM = "•";
-    public static final long MAX_DURATION_MS = 24 * 60 * 60 * 1_000;
+    public static final long MAX_LIVE_DURATION_MS = 24 * 60 * 60 * 1_000;
     private static final String OBJ_DELIM = "&vi;";
     private static final int MAX_AUTHOR_LENGTH_CHARS = 20;
-    private static final String[] sNotPlaylistParams = new String[] {"EAIYAQ%3D%3D"};
     private static final String BLACK_PLACEHOLDER_URL = "https://via.placeholder.com/1280x720/000000/000000";
     private static final float RESTORE_POSITION_PERCENTS = 10; // min value for immediately closed videos
     public long id;
     public String title;
+    public String altTitle;
     public String secondTitle;
     private String metadataTitle;
     private String metadataSecondTitle;
@@ -50,6 +53,7 @@ public final class Video {
     public String reloadPageKey;
     public String bgImageUrl;
     public String cardImageUrl;
+    public String altCardImageUrl;
     public String author;
     public String badge;
     public String previewUrl;
@@ -70,7 +74,7 @@ public final class Video {
     public String clickTrackingParams;
     public boolean isSynced;
     public final long timestamp = System.currentTimeMillis();
-    public int extra = -1;
+    public int sectionId = -1;
     public long startTimeMs;
     public long pendingPosMs;
     public boolean fromQueue;
@@ -79,7 +83,9 @@ public final class Video {
     public boolean incognito;
     public String likeCount;
     public String dislikeCount;
+    public String subscriberCount;
     public float volume = 1.0f;
+    public boolean deArrowProcessed;
     private int startSegmentNum;
     private WeakReference<VideoGroup> group; // Memory leak fix. Used to get next page when scrolling.
     public List<NotificationState> notificationStates;
@@ -162,11 +168,12 @@ public final class Video {
         video.playlistId = item.playlistId;
         video.playlistIndex = item.playlistIndex;
         video.playlistParams = item.playlistParams;
-        video.reloadPageKey = item.reloadPageKey;
+        video.reloadPageKey = item.getReloadPageKey();
         video.isLive = item.isLive;
         video.isUpcoming = item.isUpcoming;
         video.clickTrackingParams = item.clickTrackingParams;
         video.mediaItem = item.mediaItem;
+        video.group = item.group;
 
         return video;
     }
@@ -217,14 +224,14 @@ public final class Video {
      */
     @Override
     public int hashCode() {
-        int hashCode = Helpers.hashCodeAny(videoId, playlistId, reloadPageKey, playlistParams, channelId, mediaItem, extra);
+        int hashCode = Helpers.hashCodeAny(videoId, playlistId, reloadPageKey, playlistParams, channelId, mediaItem, sectionId);
         return hashCode != -1 ? hashCode : super.hashCode();
     }
 
     public static void printDebugInfo(Context context, Video item) {
         MessageHelpers.showLongMessage(context,
                 String.format("videoId=%s, playlistId=%s, reloadPageKey=%s, playlistParams=%s, channelId=%s, mediaItem=%s, extra=%s",
-                        item.videoId, item.playlistId, item.reloadPageKey, item.playlistParams, item.channelId, item.mediaItem, item.extra)
+                        item.videoId, item.playlistId, item.reloadPageKey, item.playlistParams, item.channelId, item.mediaItem, item.sectionId)
         );
     }
     
@@ -241,11 +248,20 @@ public final class Video {
     }
 
     public String getTitle() {
-        return title != null ? title : metadataTitle;
+        return altTitle != null ? altTitle : metadataTitle != null ? metadataTitle : title;
     }
 
     public String getSecondTitle() {
-        return secondTitle != null ? secondTitle : metadataSecondTitle;
+        // Don't sync future translation because of not precise info
+        return metadataSecondTitle != null && !isUpcoming ? metadataSecondTitle : secondTitle;
+    }
+
+    public String getPlaylistId() {
+        return isRemote && remotePlaylistId != null ? remotePlaylistId : playlistId;
+    }
+
+    public String getCardImageUrl() {
+        return altCardImageUrl != null ? altCardImageUrl : cardImageUrl;
     }
 
     public String getAuthor() {
@@ -253,7 +269,7 @@ public final class Video {
             return author;
         }
 
-        return extractAuthor(secondTitle != null ? secondTitle : metadataSecondTitle);
+        return extractAuthor(metadataSecondTitle != null ? metadataSecondTitle : secondTitle); // BAD idea
     }
 
     public VideoGroup getGroup() {
@@ -280,7 +296,8 @@ public final class Video {
             }
         }
 
-        return result != null ? Helpers.abbreviate(result.trim(), MAX_AUTHOR_LENGTH_CHARS) : null;
+        // Skip subtitles starting with number of views (e.g. 1.4M views)
+        return !TextUtils.isEmpty(result) && !Helpers.isNumeric(result.substring(0, 1)) ? Helpers.abbreviate(result.trim(), MAX_AUTHOR_LENGTH_CHARS) : null;
     }
 
     public static List<Video> findVideosByAuthor(VideoGroup group, String author) {
@@ -345,7 +362,7 @@ public final class Video {
         result.cardImageUrl = Helpers.parseStr(split[8]);
         result.mediaItem = YouTubeHubService.deserializeMediaItem(Helpers.parseStr(split[9]));
         result.playlistParams = Helpers.parseStr(split[10]);
-        result.extra = Helpers.parseInt(split[11]);
+        result.sectionId = Helpers.parseInt(split[11]);
         result.reloadPageKey = Helpers.parseStr(split[12]);
         result.itemType = Helpers.parseInt(split[13]);
 
@@ -357,7 +374,7 @@ public final class Video {
     public String toString() {
         return Helpers.merge(OBJ_DELIM,
                 id, category, title, videoId, videoUrl, playlistId, channelId, bgImageUrl, cardImageUrl,
-                YouTubeHubService.serialize(mediaItem), playlistParams, extra, getReloadPageKey(), itemType);
+                YouTubeHubService.serialize(mediaItem), playlistParams, sectionId, getReloadPageKey(), itemType);
     }
 
     //@Override
@@ -417,12 +434,12 @@ public final class Video {
         return mediaItem != null && mediaItem.hasUploads();
     }
 
-    public boolean isChannel() {
-        return videoId == null && channelId != null;
-    }
-
     public boolean hasPlaylistIndex() {
         return playlistIndex > 0;
+    }
+
+    public boolean isChannel() {
+        return videoId == null && channelId != null;
     }
 
     /**
@@ -533,6 +550,10 @@ public final class Video {
         return belongsToGroup(MediaGroup.TYPE_SHORTS);
     }
 
+    public boolean belongsToSearch() {
+        return belongsToGroup(MediaGroup.TYPE_SEARCH);
+    }
+
     public boolean belongsToNotifications() {
         return belongsToGroup(MediaGroup.TYPE_NOTIFICATIONS);
     }
@@ -554,10 +575,6 @@ public final class Video {
     }
 
     public void sync(MediaItemMetadata metadata) {
-        sync(metadata, false);
-    }
-
-    public void sync(MediaItemMetadata metadata, boolean useAltSecondTitle) {
         if (metadata == null) {
             return;
         }
@@ -567,17 +584,7 @@ public final class Video {
         if (!isUpcoming) {
             metadataTitle = metadata.getTitle();
 
-            metadataSecondTitle = useAltSecondTitle ? metadata.getSecondTitleAlt() : metadata.getSecondTitle();
-
-            // Casting fix (no title, no desc)
-            if (title == null) {
-                title = metadataTitle;
-            }
-
-            // Casting fix (no title, no desc)
-            if (secondTitle == null) {
-                secondTitle = metadataSecondTitle;
-            }
+            metadataSecondTitle = metadata.getSecondTitle();
 
             // NOTE: Upcoming videos metadata wrongly reported as live (live == true, upcoming == false)
             isLive = metadata.isLive();
@@ -594,7 +601,9 @@ public final class Video {
         isSubscribed = metadata.isSubscribed();
         likeCount = metadata.getLikeCount();
         dislikeCount = metadata.getDislikeCount();
+        subscriberCount = metadata.getSubscriberCount();
         notificationStates = metadata.getNotificationStates();
+        author = metadata.getAuthor();
         isSynced = true;
 
         if (mediaItem != null) {
@@ -620,6 +629,17 @@ public final class Video {
         }
 
         volume = formatInfo.getVolumeLevel();
+    }
+
+    public void sync(DislikeData dislikeData) {
+        if (dislikeData == null) {
+            return;
+        }
+
+        String likeCountNew = dislikeData.getLikeCount();
+        String dislikeCountNew = dislikeData.getDislikeCount();
+        likeCount = likeCountNew != null ? likeCountNew : likeCount;
+        dislikeCount = dislikeCountNew != null ? dislikeCountNew : dislikeCount;
     }
 
     /**
@@ -648,19 +668,6 @@ public final class Video {
         }
 
         return video;
-    }
-
-    public String getPlayerTitle() {
-        return metadataTitle != null ? metadataTitle : title != null ? title : null;
-    }
-
-    public String getPlayerSecondTitle() {
-        // Don't sync future translation because of not precise info
-        return metadataSecondTitle != null && !isUpcoming ? metadataSecondTitle : secondTitle != null ? secondTitle : null;
-    }
-
-    public String getPlaylistId() {
-        return isRemote && remotePlaylistId != null ? remotePlaylistId : playlistId;
     }
 
     private boolean checkMediaItems() {

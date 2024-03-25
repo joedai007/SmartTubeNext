@@ -4,7 +4,9 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.os.Build.VERSION;
 import com.liskovsoft.sharedutils.helpers.Helpers;
+import com.liskovsoft.smartyoutubetv2.common.BuildConfig;
 import com.liskovsoft.smartyoutubetv2.common.prefs.AppPrefs.ProfileChangeListener;
+import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
 
 public class PlayerTweaksData implements ProfileChangeListener {
     private static final String VIDEO_PLAYER_TWEAKS_DATA = "video_player_tweaks_data";
@@ -36,6 +38,7 @@ public class PlayerTweaksData implements ProfileChangeListener {
     public static final int PLAYER_BUTTON_CHAT = 0b10000000000000000000000;
     public static final int PLAYER_BUTTON_VIDEO_ROTATE = 0b100000000000000000000000;
     public static final int PLAYER_BUTTON_SCREEN_OFF_TIMEOUT = 0b1000000000000000000000000;
+    public static final int PLAYER_BUTTON_SOUND_OFF = 0b10000000000000000000000000;
     public static final int PLAYER_BUTTON_DEFAULT = PLAYER_BUTTON_SEARCH | PLAYER_BUTTON_PIP | PLAYER_BUTTON_SCREEN_OFF_TIMEOUT | PLAYER_BUTTON_VIDEO_SPEED |
             PLAYER_BUTTON_VIDEO_STATS | PLAYER_BUTTON_OPEN_CHANNEL | PLAYER_BUTTON_SUBTITLES | PLAYER_BUTTON_SUBSCRIBE |
             PLAYER_BUTTON_LIKE | PLAYER_BUTTON_DISLIKE | PLAYER_BUTTON_ADD_TO_PLAYLIST | PLAYER_BUTTON_PLAY_PAUSE |
@@ -62,6 +65,7 @@ public class PlayerTweaksData implements ProfileChangeListener {
     private int mPlayerButtons;
     private boolean mIsNoFpsPresetsEnabled;
     private boolean mIsRememberPositionOfShortVideosEnabled;
+    private boolean mIsRememberPositionOfLiveVideosEnabled;
     private boolean mIsSuggestionsDisabled;
     private boolean mIsAvcOverVp9Preferred;
     private boolean mIsChatPlacedLeft;
@@ -87,6 +91,9 @@ public class PlayerTweaksData implements ProfileChangeListener {
     private boolean mIsPlayerGlobalFocusEnabled;
     private boolean mIsUnsafeAudioFormatsEnabled;
     private boolean mIsHighBitrateFormatsUnlocked;
+    private boolean mIsLoopShortsEnabled;
+    private boolean mIsQuickShortsSkipEnabled;
+    private boolean mIsOculusQuestFixEnabled;
 
     private PlayerTweaksData(Context context) {
         mPrefs = AppPrefs.instance(context);
@@ -204,6 +211,7 @@ public class PlayerTweaksData implements ProfileChangeListener {
 
     public void forceHlsStreams(boolean enable) {
         mIsHlsStreamsForced = enable;
+        mIsDashUrlStreamsForced = false;
         persistData();
     }
 
@@ -213,6 +221,7 @@ public class PlayerTweaksData implements ProfileChangeListener {
 
     public void forceDashUrlStreams(boolean enable) {
         mIsDashUrlStreamsForced = enable;
+        mIsHlsStreamsForced = false;
         persistData();
     }
 
@@ -297,6 +306,15 @@ public class PlayerTweaksData implements ProfileChangeListener {
         return mIsRememberPositionOfShortVideosEnabled;
     }
 
+    public void enableRememberPositionOfLiveVideos(boolean enable) {
+        mIsRememberPositionOfLiveVideosEnabled = enable;
+        persistData();
+    }
+
+    public boolean isRememberPositionOfLiveVideosEnabled() {
+        return mIsRememberPositionOfLiveVideosEnabled;
+    }
+
     public boolean isSuggestionsDisabled() {
         return mIsSuggestionsDisabled;
     }
@@ -348,6 +366,15 @@ public class PlayerTweaksData implements ProfileChangeListener {
 
     public void enableSpeedButtonOldBehavior(boolean enable) {
         mIsSpeedButtonOldBehaviorEnabled = enable;
+        persistData();
+    }
+
+    public boolean isOculusQuestFixEnabled() {
+        return mIsOculusQuestFixEnabled;
+    }
+
+    public void enableOculusQuestFix(boolean enable) {
+        mIsOculusQuestFixEnabled = enable;
         persistData();
     }
 
@@ -487,6 +514,24 @@ public class PlayerTweaksData implements ProfileChangeListener {
         return mIsPlayerGlobalFocusEnabled;
     }
 
+    public void enableLoopShorts(boolean enable) {
+        mIsLoopShortsEnabled = enable;
+        persistData();
+    }
+
+    public boolean isLoopShortsEnabled() {
+        return mIsLoopShortsEnabled;
+    }
+
+    public void enableQuickShortsSkip(boolean enable) {
+        mIsQuickShortsSkipEnabled = enable;
+        persistData();
+    }
+
+    public boolean isQuickShortsSkipEnabled() {
+        return mIsQuickShortsSkipEnabled;
+    }
+
     public void unlockHighBitrateFormats(boolean enable) {
         mIsHighBitrateFormatsUnlocked = enable;
         persistData();
@@ -499,7 +544,7 @@ public class PlayerTweaksData implements ProfileChangeListener {
     private void restoreData() {
         String data = mPrefs.getProfileData(VIDEO_PLAYER_TWEAKS_DATA);
 
-        String[] split = Helpers.splitObjectLegacy(data);
+        String[] split = Helpers.splitObject(data);
 
         mIsAmlogicFixEnabled = Helpers.parseBoolean(split, 0, false);
         mIsAmazonFrameDropFixEnabled = Helpers.parseBoolean(split, 1, false);
@@ -529,13 +574,14 @@ public class PlayerTweaksData implements ProfileChangeListener {
         mIsButtonLongClickEnabled = Helpers.parseBoolean(split, 24, true);
         mIsLongSpeedListEnabled = Helpers.parseBoolean(split, 25, true);
         // Android 6 and below may crash running Cronet???
-        mPlayerDataSource = Helpers.parseInt(split, 26, VERSION.SDK_INT > 23 ? PLAYER_DATA_SOURCE_CRONET : PLAYER_DATA_SOURCE_DEFAULT);
+        mPlayerDataSource = Helpers.parseInt(split, 26, VERSION.SDK_INT <= 23 || Helpers.equals(BuildConfig.FLAVOR, "strtarmenia") ?
+                 PLAYER_DATA_SOURCE_DEFAULT : PLAYER_DATA_SOURCE_CRONET);
         mUnlockAllFormats = Helpers.parseBoolean(split, 27, false);
         mIsDashUrlStreamsForced = Helpers.parseBoolean(split, 28, false);
         mIsSonyFrameDropFixEnabled = Helpers.parseBoolean(split, 29, false);
         mIsBufferOnStreamsDisabled = Helpers.parseBoolean(split, 30, false);
         // Cause severe garbage collector stuttering
-        mIsSectionPlaylistEnabled = Helpers.parseBoolean(split, 31, VERSION.SDK_INT > 21);
+        mIsSectionPlaylistEnabled = Helpers.parseBoolean(split, 31, VERSION.SDK_INT > 21 && Helpers.getDeviceRam(mPrefs.getContext()) > 1_000_000_000);
         mIsScreenOffTimeoutEnabled = Helpers.parseBoolean(split, 32, false);
         mScreenOffTimeoutSec = Helpers.parseInt(split, 33, 0);
         mIsUIAnimationsEnabled = Helpers.parseBoolean(split, 34, false);
@@ -548,6 +594,13 @@ public class PlayerTweaksData implements ProfileChangeListener {
         mIsPlayerGlobalFocusEnabled = Helpers.parseBoolean(split, 41, true);
         mIsUnsafeAudioFormatsEnabled = Helpers.parseBoolean(split, 42, true);
         mIsHighBitrateFormatsUnlocked = Helpers.parseBoolean(split, 43, false);
+        mIsLoopShortsEnabled = Helpers.parseBoolean(split, 44, true);
+        mIsQuickShortsSkipEnabled = Helpers.parseBoolean(split, 45, true);
+        mIsRememberPositionOfLiveVideosEnabled = Helpers.parseBoolean(split, 46, false);
+        mIsOculusQuestFixEnabled = Helpers.parseBoolean(split, 47, Utils.isOculusQuest());
+        // mPlayerDataSource was here
+        // Cronet is buffering too, unfortunately, so leave the default as a safest method (e.g. for "strtarmenia")
+        // mPlayerDataSource = Helpers.parseInt(split, 48, PLAYER_DATA_SOURCE_DEFAULT);
 
         updateDefaultValues();
     }
@@ -564,7 +617,8 @@ public class PlayerTweaksData implements ProfileChangeListener {
                 mIsDashUrlStreamsForced, mIsSonyFrameDropFixEnabled, mIsBufferOnStreamsDisabled, mIsSectionPlaylistEnabled,
                 mIsScreenOffTimeoutEnabled, mScreenOffTimeoutSec, mIsUIAnimationsEnabled, mIsLikesCounterEnabled, mIsChapterNotificationEnabled,
                 mScreenOffDimmingPercents, mIsBootScreenOffEnabled, mIsPlayerUiOnNextEnabled, mIsPlayerAutoVolumeEnabled, mIsPlayerGlobalFocusEnabled,
-                mIsUnsafeAudioFormatsEnabled, mIsHighBitrateFormatsUnlocked
+                mIsUnsafeAudioFormatsEnabled, mIsHighBitrateFormatsUnlocked, mIsLoopShortsEnabled, mIsQuickShortsSkipEnabled, mIsRememberPositionOfLiveVideosEnabled,
+                mIsOculusQuestFixEnabled, null
                 ));
     }
 

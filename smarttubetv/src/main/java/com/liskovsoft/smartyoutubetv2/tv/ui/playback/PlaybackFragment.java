@@ -13,6 +13,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 import androidx.core.content.ContextCompat;
 import androidx.leanback.app.RowsSupportFragment;
 import androidx.leanback.media.PlayerAdapter;
@@ -38,6 +39,7 @@ import com.google.android.exoplayer2.ext.mediasession.MediaSessionConnector;
 import com.google.android.exoplayer2.trackselection.AdaptiveTrackSelection;
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
 import com.google.android.exoplayer2.util.Util;
+import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.sharedutils.mylogger.Log;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.VideoGroup;
@@ -89,6 +91,7 @@ import java.util.Map;
  * Plays selected video, loads playlist and related videos, and delegates playback to
  * {@link VideoPlayerGlue}.
  */
+@RequiresApi(19)
 public class PlaybackFragment extends SeekModePlaybackFragment implements PlaybackView, PlayerManager {
     private static final String TAG = PlaybackFragment.class.getSimpleName();
     private static final int UPDATE_DELAY_MS = 100;
@@ -109,7 +112,6 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     private UriBackgroundManager mBackgroundManager;
     private RowsSupportFragment mRowsSupportFragment;
     private boolean mIsUIAnimationsEnabled = false;
-    private boolean mIsLikesCounterEnabled = true;
     private int mPlaybackMode = PlayerEngine.BACKGROUND_MODE_DEFAULT;
     private MediaSessionCompat mMediaSession;
     private MediaSessionConnector mMediaSessionConnector;
@@ -234,6 +236,10 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     }
 
     private void applyTickle(MotionEvent event) {
+        if (event.getAxisValue(MotionEvent.AXIS_X) < 100) { // reserve left area for the back gesture
+            return;
+        }
+
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
             tickle(); // show Player UI
         }
@@ -449,7 +455,6 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         hideControlsOverlay(true); // fix player ui not synced correctly
 
         mIsUIAnimationsEnabled = PlayerTweaksData.instance(getContext()).isUIAnimationsEnabled();
-        mIsLikesCounterEnabled = PlayerTweaksData.instance(getContext()).isLikesCounterEnabled();
 
         mExoPlayerController.setPlayerView(mPlayerGlue);
     }
@@ -509,11 +514,11 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
             MediaMetadataCompat.Builder metadataBuilder = new MediaMetadataCompat.Builder();
 
-            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_TITLE, getVideo().title);
-            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, getVideo().title);
+            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_TITLE, getVideo().getTitle());
+            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, getVideo().getTitle());
             metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, getVideo().getAuthor());
-            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, getVideo().secondTitle);
-            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI, getVideo().cardImageUrl);
+            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, getVideo().getSecondTitle());
+            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI, getVideo().getCardImageUrl());
             metadataBuilder.putLong(MediaMetadataCompat.METADATA_KEY_DURATION, getDurationMs());
 
             return metadataBuilder.build();
@@ -585,14 +590,22 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     private void initPresenters() {
         mRowPresenter = new CustomListRowPresenter() {
             @Override
+            protected void onBindRowViewHolder(RowPresenter.ViewHolder holder, Object item) {
+                super.onBindRowViewHolder(holder, item);
+
+                focusPendingSuggestedItem();
+            }
+
+            @Override
             protected void onRowViewSelected(RowPresenter.ViewHolder holder, boolean selected) {
                 super.onRowViewSelected(holder, selected);
 
                 updatePlayerBackground();
 
-                if (selected) {
-                    focusPendingSuggestedItem();
-                }
+                // Don't select the pending item here because multiple items will be focused.
+                //if (selected) {
+                //    focusPendingSuggestedItem();
+                //}
             }
         };
 
@@ -809,8 +822,8 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
         if (mPlayerGlue != null && video != null) {
             // Preserve player formatting
-            mPlayerGlue.setTitle(video.getPlayerTitle() != null ? video.getPlayerTitle() : "...");
-            mPlayerGlue.setSubtitle(video.getPlayerSecondTitle() != null ? createSecondTitle(video) : "...");
+            mPlayerGlue.setTitle(video.getTitle() != null ? video.getTitle() : "...");
+            mPlayerGlue.setSubtitle(video.getSecondTitle() != null ? createSecondTitle(video) : "...");
             mPlayerGlue.setVideo(video);
         }
     }
@@ -826,18 +839,22 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     }
 
     private CharSequence createSecondTitle(Video video) {
-        CharSequence result = video.getPlayerSecondTitle();
+        CharSequence result = video.getSecondTitle();
 
         if (getContext() != null && video.isLive) {
-            result = TextUtils.concat( result, " ", Video.TERTIARY_TEXT_DELIM, " ", Utils.color(getContext().getString(R.string.badge_live), ContextCompat.getColor(getContext(), R.color.red)));
+            result = TextUtils.concat( result, " ", Video.TERTIARY_TEXT_DELIM, Helpers.NON_BREAKING_SPACE, Utils.color(getContext().getString(R.string.badge_live), ContextCompat.getColor(getContext(), R.color.red)));
         }
 
-        if (getContext() != null && video.likeCount != null && mIsLikesCounterEnabled) {
-            result = TextUtils.concat(result, " ", Video.TERTIARY_TEXT_DELIM, " ", video.likeCount);
+        if (getContext() != null && video.likeCount != null) {
+            result = TextUtils.concat(result, " ", Video.TERTIARY_TEXT_DELIM, Helpers.NON_BREAKING_SPACE, video.likeCount, Helpers.NON_BREAKING_SPACE, Helpers.THUMB_UP); // color of thumb cannot be changed
         }
 
-        if (getContext() != null && video.dislikeCount != null && mIsLikesCounterEnabled) {
-            result = TextUtils.concat(result, " ", Video.TERTIARY_TEXT_DELIM, " ", video.dislikeCount);
+        if (getContext() != null && video.dislikeCount != null) {
+            result = TextUtils.concat(result, " ", Video.TERTIARY_TEXT_DELIM, Helpers.NON_BREAKING_SPACE, video.dislikeCount, Helpers.NON_BREAKING_SPACE, Helpers.THUMB_DOWN); // color of thumb cannot be changed
+        }
+
+        if (getContext() != null && video.subscriberCount != null) {
+            result = TextUtils.concat(result, " ", Video.TERTIARY_TEXT_DELIM, Helpers.NON_BREAKING_SPACE, video.subscriberCount.replace(" ", Helpers.NON_BREAKING_SPACE));
         }
 
         return result;
@@ -934,8 +951,10 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     public long getDurationMs() {
         long durationMs = mExoPlayerController.getDurationMs();
 
-        if (durationMs > Video.MAX_DURATION_MS && getVideo() != null) {
-            durationMs = getVideo().getLiveDurationMs();
+        long liveDurationMs = getVideo() != null ? getVideo().getLiveDurationMs() : 0;
+
+        if (durationMs > Video.MAX_LIVE_DURATION_MS && liveDurationMs != 0) {
+            durationMs = liveDurationMs;
         }
 
         return durationMs;
@@ -988,6 +1007,11 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     }
 
     @Override
+    public FormatItem getAudioFormat() {
+        return mExoPlayerController.getAudioFormat();
+    }
+
+    @Override
     public boolean isEngineInitialized() {
         return mPlayer != null;
     }
@@ -1030,6 +1054,16 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     @Override
     public float getSpeed() {
         return mExoPlayerController.getSpeed();
+    }
+
+    @Override
+    public void setPitch(float pitch) {
+        mExoPlayerController.setPitch(pitch);
+    }
+
+    @Override
+    public float getPitch() {
+        return mExoPlayerController.getPitch();
     }
 
     @Override
@@ -1352,6 +1386,14 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
         if (group == null || group.isEmpty()) {
             Log.e(TAG, "Suggestions row is empty!");
+            return;
+        }
+
+        if (group.getAction() == VideoGroup.ACTION_SYNC) {
+            VideoGroupObjectAdapter adapter = mMediaGroupAdapters.get(group.getId());
+            if (adapter != null) {
+                adapter.sync(group);
+            }
             return;
         }
 

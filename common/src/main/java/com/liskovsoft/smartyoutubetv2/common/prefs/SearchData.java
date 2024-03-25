@@ -6,7 +6,7 @@ import com.liskovsoft.sharedutils.helpers.Helpers;
 
 public class SearchData {
     public static final int SPEECH_RECOGNIZER_SYSTEM = 0;
-    public static final int SPEECH_RECOGNIZER_DEFAULT = 1;
+    public static final int SPEECH_RECOGNIZER_INTENT = 1;
     public static final int SPEECH_RECOGNIZER_GOTEV = 2;
     private static final String SEARCH_DATA = "search_data";
     @SuppressLint("StaticFieldLeak")
@@ -138,7 +138,7 @@ public class SearchData {
     private void restoreData() {
         String data = mAppPrefs.getData(SEARCH_DATA);
 
-        String[] split = Helpers.splitObjectLegacy(data);
+        String[] split = Helpers.splitObject(data);
 
         // WARN: Don't enable Instant Voice Search
         // Serious bug on Nvidia Shield. Can't type anything with soft keyboard.

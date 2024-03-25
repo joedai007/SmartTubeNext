@@ -1,5 +1,6 @@
 package com.liskovsoft.smartyoutubetv2.common.app.presenters.settings;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.util.Pair;
 import com.liskovsoft.sharedutils.helpers.Helpers;
@@ -13,6 +14,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.UiOptionItem
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.AppDialogPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.base.BasePresenter;
 import com.liskovsoft.smartyoutubetv2.common.exoplayer.ExoMediaSourceFactory;
+import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.TrackSelectorUtil;
 import com.liskovsoft.smartyoutubetv2.common.prefs.GeneralData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerTweaksData;
@@ -63,8 +65,9 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
         appendEndingTimeCategory(settingsPresenter);
         appendPixelRatioCategory(settingsPresenter);
         appendNetworkEngineCategory(settingsPresenter);
+        appendPlayerExitCategory(settingsPresenter);
         appendMiscCategory(settingsPresenter);
-        appendTweaksCategory(settingsPresenter);
+        appendDeveloperCategory(settingsPresenter);
 
         settingsPresenter.showDialog(getContext().getString(R.string.dialog_player_ui), () -> {
             if (mRestartApp) {
@@ -95,20 +98,21 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
         settingsPresenter.appendRadioCategory(getContext().getString(R.string.player_ok_button_behavior), options);
     }
 
+    @SuppressLint("StringFormatMatches")
     private void appendUIAutoHideCategory(AppDialogPresenter settingsPresenter) {
         List<OptionItem> options = new ArrayList<>();
 
         options.add(UiOptionItem.from(
                 getContext().getString(R.string.option_never),
-                option -> mPlayerData.setUIHideTimoutSec(PlayerData.AUTO_HIDE_NEVER),
-                mPlayerData.getUIHideTimoutSec() == PlayerData.AUTO_HIDE_NEVER));
+                option -> mPlayerData.setUiHideTimeoutSec(PlayerData.AUTO_HIDE_NEVER),
+                mPlayerData.getUiHideTimeoutSec() == PlayerData.AUTO_HIDE_NEVER));
 
         for (int i = 1; i <= 15; i++) {
             int timeoutSec = i;
             options.add(UiOptionItem.from(
                     getContext().getString(R.string.ui_hide_timeout_sec, i),
-                    option -> mPlayerData.setUIHideTimoutSec(timeoutSec),
-                    mPlayerData.getUIHideTimoutSec() == i));
+                    option -> mPlayerData.setUiHideTimeoutSec(timeoutSec),
+                    mPlayerData.getUiHideTimeoutSec() == i));
         }
 
         settingsPresenter.appendRadioCategory(getContext().getString(R.string.player_ui_hide_behavior), options);
@@ -140,22 +144,8 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
     }
 
     private void appendMasterVolumeCategory(AppDialogPresenter settingsPresenter) {
-        List<OptionItem> options = new ArrayList<>();
-
-        for (int scalePercent : Helpers.range(0, 300, 5)) {
-            float scale = scalePercent / 100f;
-            options.add(UiOptionItem.from(String.format("%s%%", scalePercent),
-                    optionItem -> {
-                        mPlayerData.setPlayerVolume(scale);
-
-                        if (scalePercent > 100) {
-                            MessageHelpers.showLongMessage(getContext(), R.string.volume_boost_warning);
-                        }
-                    },
-                    Helpers.floatEquals(scale, mPlayerData.getPlayerVolume())));
-        }
-
-        settingsPresenter.appendRadioCategory(getContext().getString(R.string.player_volume), options);
+        OptionCategory category = AppDialogUtil.createAudioVolumeCategory(getContext(), mPlayerData);
+        settingsPresenter.appendCategory(category);
     }
 
     private void appendSeekingPreviewCategory(AppDialogPresenter settingsPresenter) {
@@ -200,6 +190,7 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
         List<OptionItem> options = new ArrayList<>();
 
         for (int[] pair : new int[][] {
+                {R.string.action_sound_off, PlayerTweaksData.PLAYER_BUTTON_SOUND_OFF},
                 {R.string.video_rotate, PlayerTweaksData.PLAYER_BUTTON_VIDEO_ROTATE},
                 {R.string.open_chat, PlayerTweaksData.PLAYER_BUTTON_CHAT},
                 {R.string.content_block_provider, PlayerTweaksData.PLAYER_BUTTON_CONTENT_BLOCK},
@@ -238,8 +229,13 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
         settingsPresenter.appendCheckedCategory(getContext().getString(R.string.player_buttons), options);
     }
 
-    private void appendTweaksCategory(AppDialogPresenter settingsPresenter) {
+    private void appendDeveloperCategory(AppDialogPresenter settingsPresenter) {
         List<OptionItem> options = new ArrayList<>();
+
+        options.add(UiOptionItem.from(getContext().getString(R.string.prefer_ipv4),
+                getContext().getString(R.string.prefer_ipv4_desc),
+                option -> GlobalPreferences.instance(getContext()).preferIPv4Dns(!option.isSelected()),
+                !GlobalPreferences.instance(getContext()).isIPv4DnsPreferred()));
 
         // Disable long press on buggy controllers.
         options.add(UiOptionItem.from(getContext().getString(R.string.disable_ok_long_press),
@@ -263,7 +259,7 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
                 },
                 mPlayerTweaksData.isTextureViewEnabled()));
 
-        options.add(UiOptionItem.from(getContext().getString(R.string.unlock_high_bitrate_formats),
+        options.add(UiOptionItem.from(getContext().getString(R.string.unlock_high_bitrate_formats) + " " + TrackSelectorUtil.HIGH_BITRATE_MARK,
                 option -> mPlayerTweaksData.unlockHighBitrateFormats(option.isSelected()),
                 mPlayerTweaksData.isHighBitrateFormatsUnlocked()));
 
@@ -280,7 +276,6 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
                 getContext().getString(R.string.live_stream_fix_desc),
                 option -> {
                     mPlayerTweaksData.forceHlsStreams(option.isSelected());
-                    mPlayerTweaksData.forceDashUrlStreams(false);
                 },
                 mPlayerTweaksData.isHlsStreamsForced()));
 
@@ -288,7 +283,6 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
                 getContext().getString(R.string.live_stream_fix_4k_desc),
                 option -> {
                     mPlayerTweaksData.forceDashUrlStreams(option.isSelected());
-                    mPlayerTweaksData.forceHlsStreams(false);
                 },
                 mPlayerTweaksData.isDashUrlStreamsForced()));
 
@@ -358,11 +352,11 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
                 option -> mPlayerTweaksData.disableBufferOnStreams(option.isSelected()),
                 mPlayerTweaksData.isBufferOnStreamsDisabled()));
 
-        options.add(UiOptionItem.from("Keep finished activities",
+        options.add(UiOptionItem.from(getContext().getString(R.string.keep_finished_activities),
                 option -> mPlayerTweaksData.enableKeepFinishedActivity(option.isSelected()),
                 mPlayerTweaksData.isKeepFinishedActivityEnabled()));
 
-        options.add(UiOptionItem.from("Disable Channels service",
+        options.add(UiOptionItem.from(getContext().getString(R.string.disable_channels_service),
                 option -> GlobalPreferences.instance(getContext()).enableChannelsService(!option.isSelected()),
                 !GlobalPreferences.instance(getContext()).isChannelsServiceEnabled()));
 
@@ -372,6 +366,14 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
                     mRestartApp = true;
                 },
                 !mGeneralData.isSettingsSectionEnabled()));
+
+        // Oculus Quest fix: back button not closing the activity
+        options.add(UiOptionItem.from("Oculus Quest fix",
+                option -> {
+                    mPlayerTweaksData.enableOculusQuestFix(option.isSelected());
+                    mRestartApp = true;
+                },
+                mPlayerTweaksData.isOculusQuestFixEnabled()));
 
         // Disabled inside RetrofitHelper
         //options.add(UiOptionItem.from("Prefer IPv4 DNS",
@@ -521,6 +523,14 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
     private void appendMiscCategory(AppDialogPresenter settingsPresenter) {
         List<OptionItem> options = new ArrayList<>();
 
+        options.add(UiOptionItem.from(getContext().getString(R.string.player_loop_shorts),
+                option -> mPlayerTweaksData.enableLoopShorts(option.isSelected()),
+                mPlayerTweaksData.isLoopShortsEnabled()));
+
+        options.add(UiOptionItem.from(getContext().getString(R.string.player_quick_shorts_skip),
+                option -> mPlayerTweaksData.enableQuickShortsSkip(option.isSelected()),
+                mPlayerTweaksData.isQuickShortsSkipEnabled()));
+
         options.add(UiOptionItem.from(getContext().getString(R.string.player_global_focus),
                 option -> mPlayerTweaksData.enablePlayerGlobalFocus(option.isSelected()),
                 mPlayerTweaksData.isPlayerGlobalFocusEnabled()));
@@ -613,6 +623,10 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
                 option -> mPlayerData.enableGlobalEndingTime(option.isSelected()),
                 mPlayerData.isGlobalEndingTimeEnabled()));
 
+        options.add(UiOptionItem.from(getContext().getString(R.string.remember_position_of_live_videos),
+                option -> mPlayerTweaksData.enableRememberPositionOfLiveVideos(option.isSelected()),
+                mPlayerTweaksData.isRememberPositionOfLiveVideosEnabled()));
+
         options.add(UiOptionItem.from(getContext().getString(R.string.remember_position_of_short_videos),
                 option -> mPlayerTweaksData.enableRememberPositionOfShortVideos(option.isSelected()),
                 mPlayerTweaksData.isRememberPositionOfShortVideosEnabled()));
@@ -622,5 +636,19 @@ public class PlayerSettingsPresenter extends BasePresenter<Void> {
                 mPlayerTweaksData.isSpeedButtonOldBehaviorEnabled()));
 
         settingsPresenter.appendCheckedCategory(getContext().getString(R.string.player_other), options);
+    }
+
+    private void appendPlayerExitCategory(AppDialogPresenter settingsPresenter) {
+        List<OptionItem> options = new ArrayList<>();
+
+        for (int[] pair : new int[][] {
+                {R.string.app_double_back_exit, GeneralData.EXIT_DOUBLE_BACK},
+                {R.string.app_single_back_exit, GeneralData.EXIT_SINGLE_BACK}}) {
+            options.add(UiOptionItem.from(getContext().getString(pair[0]),
+                    optionItem -> mGeneralData.setPlayerExitShortcut(pair[1]),
+                    mGeneralData.getPlayerExitShortcut() == pair[1]));
+        }
+
+        settingsPresenter.appendRadioCategory(getContext().getString(R.string.player_exit_shortcut), options);
     }
 }

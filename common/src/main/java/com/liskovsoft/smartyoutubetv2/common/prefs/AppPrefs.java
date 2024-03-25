@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class AppPrefs extends SharedPreferencesBase implements AccountChangeListener {
     private static final String TAG = AppPrefs.class.getSimpleName();
@@ -27,7 +28,7 @@ public class AppPrefs extends SharedPreferencesBase implements AccountChangeList
     private static final String LAST_PROFILE_NAME = "last_profile_name";
     private String mBootResolution;
     private final Map<String, Integer> mDataHashes = new HashMap<>();
-    private final List<ProfileChangeListener> mListeners = new ArrayList<>();
+    private final List<ProfileChangeListener> mListeners = new CopyOnWriteArrayList<>();
 
     public interface ProfileChangeListener {
         void onProfileChanged();
@@ -75,12 +76,20 @@ public class AppPrefs extends SharedPreferencesBase implements AccountChangeList
         return mBootResolution;
     }
 
+    //public String getStateUpdaterData() {
+    //    return getString(STATE_UPDATER_DATA, null);
+    //}
+    //
+    //public void setStateUpdaterData(String data) {
+    //    putString(STATE_UPDATER_DATA, data);
+    //}
+
     public String getStateUpdaterData() {
-        return getString(STATE_UPDATER_DATA, null);
+        return getProfileData(STATE_UPDATER_DATA);
     }
 
     public void setStateUpdaterData(String data) {
-        putString(STATE_UPDATER_DATA, data);
+        setProfileData(STATE_UPDATER_DATA, data);
     }
 
     public void setProfileData(String key, String data) {

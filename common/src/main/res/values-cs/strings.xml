@@ -43,7 +43,7 @@
     <string name="section_is_empty">Tady nic není</string>
     <string name="dialog_add_to_playlist">Přidat do playlistu</string>
     <string name="msg_signed_users_only">Pouze přihlášení uživatelé</string>
-    <string name="msg_cant_load_content">Jejda. Nelze načíst obsah.\n1) Zkontrolujte čas a datum zařízení.\n2) Zkontrolujte připojení k síti.\n3) Zkontrolujte nastavení proxy.\n4) Zkuste se přihlásit do svého účtu.\n5) Možná tu nic není.</string>   
+    <string name="msg_cant_load_content">Jejda. Nelze načíst obsah.\n1) Zapněte historii prohlížení.\n2) Zkontrolujte čas a datum zařízení.\n3) Zkontrolujte připojení k síti.\n4) Zkontrolujte nastavení proxy.\n5) Zkuste se přihlásit do svého účtu.\n6) Možná tu nic není.</string>   
     <string name="title_video_presets">Video předvolby</string>
     <string name="settings_accounts">Účty</string>
     <string name="settings_left_panel">Upravit kategorie</string>
@@ -136,6 +136,7 @@
     <string name="player_show_ending_time">Ukaž čas ukončení na ovládacím panelu</string>
     <string name="open_channel_uploads">Otevřít videa kanálu</string>
     <string name="app_exit_shortcut">Ukončit aplikaci</string>
+    <string name="player_exit_shortcut">Ukončit z přehrávače</string>
     <string name="app_exit_none">Neukončovat</string>
     <string name="app_double_back_exit">2x tlačítko Zpět</string>
     <string name="app_single_back_exit">1x tlačítko Zpět</string>
@@ -230,6 +231,8 @@
     <string name="pin_unpin_from_sidebar">Přidat/Odebrat k postrannímu panelu</string>
     <string name="pin_unpin_playlist">Přidat/Odebrat playlist k postrannímu panelu</string>
     <string name="pin_unpin_channel">Přidat/Odebrat kanál k postrannímu panelu</string>
+    <string name="pin_playlist">Přidat playlist na postranní panel</string>
+    <string name="pin_channel">Přidat kanál na postranní panel</string>
     <string name="pinned_to_sidebar">Přidáno na postranní panel</string>
     <string name="unpin_from_sidebar">Odebrat z postranního panelu</string>
     <string name="unpinned_from_sidebar">Odebráno z postranního panelu</string>
@@ -308,6 +311,7 @@
     <string name="action_pip">Obraz v obraze</string>
     <string name="action_video_info">Popis videa</string>
     <string name="action_screen_off">Vypnout obrazovku</string>
+    <string name="action_sound_off">Vypnout zvuk</string>
     <string name="action_playback_queue">Fronta přehrávání</string>
     <string name="action_video_speed">Rychlost videa</string>
     <string name="action_subtitles">Titulky</string>
@@ -401,6 +405,7 @@
     <string name="player_volume">Hlasitost</string>
     <string name="play_video">Přehrát</string>
     <string name="remember_position_of_short_videos">Pamatovat si pozici krátkých videí (méně než 5 minut)</string>
+    <string name="remember_position_of_live_videos">Pamatovat si pozici živých přenosů</string>
     <string name="player_show_tooltips">Zobrazit nápovědu tlačítek</string>
     <string name="action_like_unset">"Líbí se" není nastaveno</string>
     <string name="action_dislike_unset">"Nelíbí se" není nastaveno</string>
@@ -412,6 +417,7 @@
     <string name="pressing_back">stisknutím tlačítka ZPĚT</string>
     <string name="player_number_key_seek">Posuv pomocí čísel</string>
     <string name="save_remove_playlist">Přidat/Odebrat playlist ze sekce Playlisty</string>
+    <string name="save_playlist">Přidat playlist do sekce Playlisty</string>
     <string name="remove_playlist">Odstranit playlist ze sekce Playlisty natrvalo</string>
     <string name="removed_from_playlists">Odstraněno ze sekce Playlisty</string>
     <string name="saved_to_playlists">Přidáno do sekce Playlisty</string>
@@ -501,7 +507,8 @@
     <string name="thumb_quality_start">Na začátku videa</string>
     <string name="thumb_quality_middle">Uprostřed videa</string>
     <string name="thumb_quality_end">Na konci videa</string>
-    <string name="content_block_status">Zkontrolovat stav SponsorBlocku</string>
+    <string name="content_block_status">Zkontrolovat stav SponsorBlock serveru</string>
+    <string name="dearrow_status">Zkontrolovat stav DeArrow serveru</string>
     <string name="player_show_quality_info_bitrate">Přidej bitrate do informací o kvalitě</string>
     <string name="player_speed_button_old_behavior">Vrátit původní chování tlačítka rychlosti</string>
     <string name="protect_settings_with_password">Chránit všechna nastavení heslem</string>
@@ -563,6 +570,7 @@
     <string name="sony_frame_drop_fix_desc">Opravuje záseky na televizích Sony a jiných zařízeních. Pozor: mohou nastat problémy se synchronizací audia</string>
     <string name="audio_language">Jazyk zvuku</string>
     <string name="old_home_look">Původní vzhled sekce Domů</string>
+    <string name="old_channel_look">Původní vzhled stránky Kanálu</string>
     <string name="hide_shorts_everywhere">Skrýt Shorts ze všech sekcí</string>
     <string name="update_found">Aktualizace</string>
     <string name="volume_boost_warning">Další nastavení nad limit může poškodit reproduktory</string>
@@ -613,10 +621,35 @@
     <string name="prefer_avc_over_vp9_desc">POZOR: Maximálně 1080p</string>
     <string name="play_next">Přehrát další</string>
     <string name="hide_watched_from_subscriptions">Skrýt zhlédnutá videa v Odběrech</string>
+    <string name="hide_watched_from_notifications">Skrýt zhlédnutá videa v Oznámení</string>
     <string name="hide_unwanted_content">Skrýt nežádoucí obsah</string>
     <string name="hide_watched_from_home">Skrýt zhlédnutá videa ze sekce Domů</string>
+    <string name="hide_watched_from_watch_later">Skrýt zhlédnutá videa ze seznamu Přehrát později</string>
     <string name="remote_control_permission">Dálkové ovládání na pozadí vyžaduje oprávnění pro překrytí přes okna</string>
     <string name="login_from_browser">Přihlášení přes prohlížeč</string>
     <string name="disable_remote_history">Zazázat historii při používání dálkového ovládání</string>
     <string name="keyboard_fix">Oprava zobrazení klávesnice stisknutím tlačítka OK (G20s a další)</string>
+    <string name="nothing_found">Nic nenalezeno</string>
+    <string name="auto_frame_rate_desc">Tato možnost eliminuje chvění ve scénách, kde se kamera rychle pohybuje(např. sportovní přenosy)</string>
+    <string name="channel_filter_hint">Filtrovat kanály</string>
+    <string name="player_loop_shorts">Opakovat Shorts</string>
+    <string name="player_quick_shorts_skip">Přeskakovat Shorts tlačítky vlevo/vpravo</string>
+    <string name="channels_filter">Zobrazit vyhledávací pole v sekci Kanály</string>
+    <string name="channel_search_bar">Vyhledávací panel na stránce kanálu</string>
+    <string name="header_sports">Sporty</string>
+    <string name="keep_finished_activities">Udržovat dokončené aktivity</string>
+    <string name="disable_channels_service">Zakázat službu Kanály</string>
+    <string name="replace_titles">Nahradit názvy videí</string>
+    <string name="enable">Povolit</string>
+    <string name="more_info">Více informací</string>
+    <string name="about_sponsorblock">O SponsorBlocku</string>
+    <string name="about_dearrow">O DeArrow</string>
+    <string name="replace_thumbnails">Nahradit náhledy</string>
+    <string name="crowdsourced_thumbnails">Komunitní náhledy</string>
+    <string name="crowdsoursed_titles">Komunitní názvy</string>
+    <string name="dearrow_not_submitted_thumbs">Odkud vzít nepřidané náhledy</string>
+    <string name="pitch_effect">Efekt výšky tónu</string>
+    <string name="fullscreen_mode">Režim celé obrazovky (bez systémových lišt)</string>
+    <string name="player_only_mode">Zobrazit pouze přehrávač, pokud je video otevřeno mimo aplikaci</string>
+    <string name="pinned_channel_rows">Zobrazit připnutý kanál jako řádky</string>
 </resources>

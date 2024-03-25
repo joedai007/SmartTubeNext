@@ -43,7 +43,8 @@ public class GeneralData implements ProfileChangeListener {
     private boolean mIsSettingsSectionEnabled;
     private int mBootSectionId;
     private int mAppExitShortcut;
-    private boolean mIsReturnToLauncherEnabled;
+    private int mPlayerExitShortcut;
+    private boolean mIsPlayerOnlyModeEnabled;
     private int mBackgroundShortcut;
     private boolean mIsHideShortsFromSubscriptionsEnabled;
     private boolean mIsHideUpcomingEnabled;
@@ -60,12 +61,14 @@ public class GeneralData implements ProfileChangeListener {
     private boolean mIsRemapPageUpToLikeEnabled;
     private boolean mIsRemapChannelUpToNextEnabled;
     private boolean mIsRemapChannelUpToLikeEnabled;
+    private boolean mIsRemapChannelUpToVolumeEnabled;
     private boolean mIsRemapPageUpToSpeedEnabled;
     private boolean mIsRemapChannelUpToSpeedEnabled;
     private boolean mIsRemapFastForwardToSpeedEnabled;
-    private boolean mIsRemapNextPrevToSpeedEnabled;
+    private boolean mIsRemapNextToFastForwardEnabled;
+    private boolean mIsRemapNextToSpeedEnabled;
     private boolean mIsRemapNumbersToSpeedEnabled;
-    private boolean mIsRemapPlayPauseToOKEnabled;
+    private boolean mIsRemapPlayToOKEnabled;
     private boolean mIsRemapChannelUpToSearchEnabled;
     private boolean mIsHideShortsFromHomeEnabled;
     private boolean mIsHideShortsFromHistoryEnabled;
@@ -81,13 +84,21 @@ public class GeneralData implements ProfileChangeListener {
     private int mVersionCode;
     private boolean mIsSelectChannelSectionEnabled;
     private boolean mIsOldHomeLookEnabled;
+    private boolean mIsOldChannelLookEnabled;
     private boolean mIsOldUpdateNotificationsEnabled;
     private boolean mRememberSubscriptionsPosition;
+    private boolean mIsRemapDpadUpToSpeedEnabled;
+    private boolean mIsRemapDpadUpToVolumeEnabled;
+    private boolean mIsRemapDpadLeftToVolumeEnabled;
+    private boolean mIsHideWatchedFromNotificationsEnabled;
+    private boolean mIsHideWatchedFromWatchLaterEnabled;
     private Video mSelectedSubscriptionsItem;
+    private List<String> mChangelog;
     private final Map<Integer, Integer> mDefaultSections = new LinkedHashMap<>();
     private final Map<String, Integer> mPlaylistOrder = new HashMap<>();
     private final List<Video> mPendingStreams = new CopyOnWriteArrayList<>();
     private final List<Video> mPinnedItems = new CopyOnWriteHashList<>();
+    private boolean mIsFullscreenModeEnabled;
 
     private GeneralData(Context context) {
         mContext = context;
@@ -132,7 +143,7 @@ public class GeneralData implements ProfileChangeListener {
             int index = getDefaultSectionIndex(sectionId);
 
             Video item = new Video();
-            item.extra = sectionId;
+            item.sectionId = sectionId;
 
             if (mPinnedItems.contains(item)) { // don't reorder if item already exists
                 persistState();
@@ -145,7 +156,7 @@ public class GeneralData implements ProfileChangeListener {
                 mPinnedItems.add(index, item);
             }
         } else {
-            Helpers.removeIf(mPinnedItems, value -> value.extra == sectionId);
+            Helpers.removeIf(mPinnedItems, value -> value.sectionId == sectionId);
         }
 
         persistState();
@@ -170,8 +181,8 @@ public class GeneralData implements ProfileChangeListener {
         List<Integer> enabledSections = new ArrayList<>();
 
         for (Video item : mPinnedItems) {
-            if (item.extra != -1) {
-                enabledSections.add(item.extra);
+            if (item.sectionId != -1) {
+                enabledSections.add(item.sectionId);
             }
         }
 
@@ -289,13 +300,22 @@ public class GeneralData implements ProfileChangeListener {
         persistState();
     }
 
-    public void enableReturnToLauncher(boolean enable) {
-        mIsReturnToLauncherEnabled = enable;
+    public int getPlayerExitShortcut() {
+        return mPlayerExitShortcut;
+    }
+
+    public void setPlayerExitShortcut(int type) {
+        mPlayerExitShortcut = type;
         persistState();
     }
 
-    public boolean isReturnToLauncherEnabled() {
-        return mIsReturnToLauncherEnabled;
+    public void enablePlayerOnlyMode(boolean enable) {
+        mIsPlayerOnlyModeEnabled = enable;
+        persistState();
+    }
+
+    public boolean isPlayerOnlyModeEnabled() {
+        return mIsPlayerOnlyModeEnabled;
     }
 
     public int getBackgroundPlaybackShortcut() {
@@ -353,12 +373,22 @@ public class GeneralData implements ProfileChangeListener {
         return GlobalPreferences.sInstance.isHideWatchedFromSubscriptionsEnabled();
     }
 
-    public void hideShortsEverywhere(boolean enable) {
-        GlobalPreferences.sInstance.hideShortsEverywhere(enable);
+    public void hideWatchedFromNotifications(boolean enable) {
+        mIsHideWatchedFromNotificationsEnabled = enable;
+        persistState();
     }
 
-    public boolean isHideShortsEverywhereEnabled() {
-        return GlobalPreferences.sInstance.isHideShortsEverywhereEnabled();
+    public boolean isHideWatchedFromNotificationsEnabled() {
+        return mIsHideWatchedFromNotificationsEnabled;
+    }
+
+    public void hideWatchedFromWatchLater(boolean enable) {
+        mIsHideWatchedFromWatchLaterEnabled = enable;
+        persistState();
+    }
+
+    public boolean isHideWatchedFromWatchLaterEnabled() {
+        return mIsHideWatchedFromWatchLaterEnabled;
     }
 
     public boolean isHideStreamsFromSubscriptionsEnabled() {
@@ -387,14 +417,6 @@ public class GeneralData implements ProfileChangeListener {
 
     public boolean isHideShortsFromTrendingEnabled() {
         return GlobalPreferences.sInstance.isHideShortsFromTrendingEnabled();
-    }
-
-    public void hideUpcoming(boolean enable) {
-        GlobalPreferences.sInstance.hideUpcoming(enable);
-    }
-
-    public boolean isHideUpcomingEnabled() {
-        return GlobalPreferences.sInstance.isHideUpcomingEnabled();
     }
 
     public void hideUpcomingFromSubscriptions(boolean enable) {
@@ -431,8 +453,8 @@ public class GeneralData implements ProfileChangeListener {
     }
 
     public void remapFastForwardToNext(boolean enable) {
+        resetFastForwardSettings();
         mIsRemapFastForwardToNextEnabled = enable;
-        mIsRemapFastForwardToSpeedEnabled = false;
         persistState();
     }
 
@@ -441,8 +463,8 @@ public class GeneralData implements ProfileChangeListener {
     }
 
     public void remapFastForwardToSpeed(boolean enable) {
+        resetFastForwardSettings();
         mIsRemapFastForwardToSpeedEnabled = enable;
-        mIsRemapFastForwardToNextEnabled = false;
         persistState();
     }
 
@@ -450,13 +472,34 @@ public class GeneralData implements ProfileChangeListener {
         return mIsRemapFastForwardToSpeedEnabled;
     }
 
-    public void remapNextPrevToSpeed(boolean enable) {
-        mIsRemapNextPrevToSpeedEnabled = enable;
+    private void resetFastForwardSettings() {
+        mIsRemapFastForwardToSpeedEnabled = false;
+        mIsRemapFastForwardToNextEnabled = false;
+    }
+
+    public void remapNextToFastForward(boolean enable) {
+        resetNextSettings();
+        mIsRemapNextToFastForwardEnabled = enable;
         persistState();
     }
 
-    public boolean isRemapNextPrevToSpeedEnabled() {
-        return mIsRemapNextPrevToSpeedEnabled;
+    public boolean isRemapNextToFastForwardEnabled() {
+        return mIsRemapNextToFastForwardEnabled;
+    }
+
+    public void remapNextToSpeed(boolean enable) {
+        resetNextSettings();
+        mIsRemapNextToSpeedEnabled = enable;
+        persistState();
+    }
+
+    public boolean isRemapNextToSpeedEnabled() {
+        return mIsRemapNextToSpeedEnabled;
+    }
+
+    private void resetNextSettings() {
+        mIsRemapNextToFastForwardEnabled = false;
+        mIsRemapNextToSpeedEnabled = false;
     }
 
     public void remapNumbersToSpeed(boolean enable) {
@@ -468,19 +511,52 @@ public class GeneralData implements ProfileChangeListener {
         return mIsRemapNumbersToSpeedEnabled;
     }
 
-    public void remapPlayPauseToOK(boolean enable) {
-        mIsRemapPlayPauseToOKEnabled = enable;
+    public void remapDpadUpDownToSpeed(boolean enable) {
+        resetDpadUpSettings();
+        mIsRemapDpadUpToSpeedEnabled = enable;
         persistState();
     }
 
-    public boolean isRemapPlayPauseToOKEnabled() {
-        return mIsRemapPlayPauseToOKEnabled;
+    public boolean isRemapDpadUpToSpeedEnabled() {
+        return mIsRemapDpadUpToSpeedEnabled;
+    }
+
+    public void remapDpadUpToVolume(boolean enable) {
+        resetDpadUpSettings();
+        mIsRemapDpadUpToVolumeEnabled = enable;
+        persistState();
+    }
+
+    public boolean isRemapDpadUpToVolumeEnabled() {
+        return mIsRemapDpadUpToVolumeEnabled;
+    }
+
+    private void resetDpadUpSettings() {
+        mIsRemapDpadUpToSpeedEnabled = false;
+        mIsRemapDpadUpToVolumeEnabled = false;
+    }
+
+    public void remapDpadLeftToVolume(boolean enable) {
+        mIsRemapDpadLeftToVolumeEnabled = enable;
+        persistState();
+    }
+
+    public boolean isRemapDpadLeftToVolumeEnabled() {
+        return mIsRemapDpadLeftToVolumeEnabled;
+    }
+
+    public void remapPlayToOK(boolean enable) {
+        mIsRemapPlayToOKEnabled = enable;
+        persistState();
+    }
+
+    public boolean isRemapPlayToOKEnabled() {
+        return mIsRemapPlayToOKEnabled;
     }
 
     public void remapPageUpToNext(boolean enable) {
+        resetPageUpSettings();
         mIsRemapPageUpToNextEnabled = enable;
-        mIsRemapPageUpToLikeEnabled = false;
-        mIsRemapPageUpToSpeedEnabled = false;
         persistState();
     }
 
@@ -489,9 +565,8 @@ public class GeneralData implements ProfileChangeListener {
     }
 
     public void remapPageUpToLike(boolean enable) {
+        resetPageUpSettings();
         mIsRemapPageUpToLikeEnabled = enable;
-        mIsRemapPageUpToNextEnabled = false;
-        mIsRemapPageUpToSpeedEnabled = false;
         persistState();
     }
 
@@ -500,10 +575,15 @@ public class GeneralData implements ProfileChangeListener {
     }
 
     public void remapPageUpToSpeed(boolean enable) {
+        resetPageUpSettings();
         mIsRemapPageUpToSpeedEnabled = enable;
+        persistState();
+    }
+
+    private void resetPageUpSettings() {
+        mIsRemapPageUpToSpeedEnabled = false;
         mIsRemapPageUpToLikeEnabled = false;
         mIsRemapPageUpToNextEnabled = false;
-        persistState();
     }
 
     public boolean isRemapPageUpToSpeedEnabled() {
@@ -511,10 +591,8 @@ public class GeneralData implements ProfileChangeListener {
     }
 
     public void remapChannelUpToNext(boolean enable) {
+        resetChannelUpSettings();
         mIsRemapChannelUpToNextEnabled = enable;
-        mIsRemapChannelUpToSearchEnabled = false;
-        mIsRemapChannelUpToLikeEnabled = false;
-        mIsRemapChannelUpToSpeedEnabled = false;
         persistState();
     }
 
@@ -522,11 +600,19 @@ public class GeneralData implements ProfileChangeListener {
         return mIsRemapChannelUpToNextEnabled;
     }
 
+    public void remapChannelUpToVolume(boolean enable) {
+        resetChannelUpSettings();
+        mIsRemapChannelUpToVolumeEnabled = enable;
+        persistState();
+    }
+
+    public boolean isRemapChannelUpToVolumeEnabled() {
+        return mIsRemapChannelUpToVolumeEnabled;
+    }
+
     public void remapChannelUpToLike(boolean enable) {
+        resetChannelUpSettings();
         mIsRemapChannelUpToLikeEnabled = enable;
-        mIsRemapChannelUpToSearchEnabled = false;
-        mIsRemapChannelUpToNextEnabled = false;
-        mIsRemapChannelUpToSpeedEnabled = false;
         persistState();
     }
 
@@ -535,10 +621,8 @@ public class GeneralData implements ProfileChangeListener {
     }
 
     public void remapChannelUpToSpeed(boolean enable) {
+        resetChannelUpSettings();
         mIsRemapChannelUpToSpeedEnabled = enable;
-        mIsRemapChannelUpToSearchEnabled = false;
-        mIsRemapChannelUpToLikeEnabled = false;
-        mIsRemapChannelUpToNextEnabled = false;
         persistState();
     }
 
@@ -547,11 +631,17 @@ public class GeneralData implements ProfileChangeListener {
     }
 
     public void remapChannelUpToSearch(boolean enable) {
+        resetChannelUpSettings();
         mIsRemapChannelUpToSearchEnabled = enable;
-        mIsRemapChannelUpToSpeedEnabled = false;
-        mIsRemapChannelUpToLikeEnabled = false;
-        mIsRemapChannelUpToNextEnabled = false;
         persistState();
+    }
+
+    private void resetChannelUpSettings() {
+        mIsRemapChannelUpToVolumeEnabled = false;
+        mIsRemapChannelUpToNextEnabled = false;
+        mIsRemapChannelUpToSearchEnabled = false;
+        mIsRemapChannelUpToLikeEnabled = false;
+        mIsRemapChannelUpToSpeedEnabled = false;
     }
 
     public boolean isRemapChannelUpToSearchEnabled() {
@@ -779,6 +869,15 @@ public class GeneralData implements ProfileChangeListener {
         return mIsOldHomeLookEnabled;
     }
 
+    public void enableOldChannelLook(boolean enable) {
+        mIsOldChannelLookEnabled = enable;
+        persistState();
+    }
+
+    public boolean isOldChannelLookEnabled() {
+        return mIsOldChannelLookEnabled;
+    }
+
     public void enableOldUpdateNotifications(boolean enable) {
         mIsOldUpdateNotificationsEnabled = enable;
         persistState();
@@ -786,6 +885,15 @@ public class GeneralData implements ProfileChangeListener {
 
     public boolean isOldUpdateNotificationsEnabled() {
         return mIsOldUpdateNotificationsEnabled;
+    }
+
+    public void enableFullscreenMode(boolean enable) {
+        mIsFullscreenModeEnabled = enable;
+        persistState();
+    }
+
+    public boolean isFullscreenModeEnabled() {
+        return mIsFullscreenModeEnabled;
     }
 
     public void setSelectedSubscriptionsItem(Video item) {
@@ -797,12 +905,22 @@ public class GeneralData implements ProfileChangeListener {
         return mSelectedSubscriptionsItem;
     }
 
+    public void setChangelog(List<String> changelog) {
+        mChangelog = changelog;
+        persistState();
+    }
+
+    public List<String> getChangelog() {
+        return mChangelog;
+    }
+
     private void initSections() {
         mDefaultSections.put(R.string.header_notifications, MediaGroup.TYPE_NOTIFICATIONS);
         mDefaultSections.put(R.string.header_home, MediaGroup.TYPE_HOME);
         mDefaultSections.put(R.string.header_shorts, MediaGroup.TYPE_SHORTS);
         mDefaultSections.put(R.string.header_trending, MediaGroup.TYPE_TRENDING);
         mDefaultSections.put(R.string.header_kids_home, MediaGroup.TYPE_KIDS_HOME);
+        mDefaultSections.put(R.string.header_sports, MediaGroup.TYPE_SPORTS);
         mDefaultSections.put(R.string.header_gaming, MediaGroup.TYPE_GAMING);
         mDefaultSections.put(R.string.header_news, MediaGroup.TYPE_NEWS);
         mDefaultSections.put(R.string.header_music, MediaGroup.TYPE_MUSIC);
@@ -820,20 +938,20 @@ public class GeneralData implements ProfileChangeListener {
             }
 
             value.videoId = null;
-            return !value.hasPlaylist() && value.channelId == null && value.extra == -1 && !value.hasReloadPageKey();
+            return !value.hasPlaylist() && value.channelId == null && value.sectionId == -1 && !value.hasReloadPageKey();
         });
     }
 
     private void restoreState() {
         String data = mPrefs.getProfileData(GENERAL_DATA);
 
-        String[] split = Helpers.splitObjectLegacy(data);
+        String[] split = Helpers.splitObject(data);
 
         // Zero index is skipped. Selected sections were there.
         mBootSectionId = Helpers.parseInt(split, 1, MediaGroup.TYPE_HOME);
         mIsSettingsSectionEnabled = Helpers.parseBoolean(split, 2, true);
         mAppExitShortcut = Helpers.parseInt(split, 3, EXIT_DOUBLE_BACK);
-        mIsReturnToLauncherEnabled = Helpers.parseBoolean(split, 4, false);
+        mIsPlayerOnlyModeEnabled = Helpers.parseBoolean(split, 4, false);
         mBackgroundShortcut = Helpers.parseInt(split, 5, BACKGROUND_PLAYBACK_SHORTCUT_HOME_BACK);
         String pinnedItems = Helpers.parseStr(split, 6);
         mIsHideShortsFromSubscriptionsEnabled = Helpers.parseBoolean(split, 7, false);
@@ -875,12 +993,24 @@ public class GeneralData implements ProfileChangeListener {
         mIsOldHomeLookEnabled = Helpers.parseBoolean(split, 42, Build.VERSION.SDK_INT <= 19);
         mIsOldUpdateNotificationsEnabled = Helpers.parseBoolean(split, 43, false);
         mScreensaverDimmingPercents = Helpers.parseInt(split, 44, 80);
-        mIsRemapNextPrevToSpeedEnabled = Helpers.parseBoolean(split, 45, false);
-        mIsRemapPlayPauseToOKEnabled = Helpers.parseBoolean(split, 46, false);
+        mIsRemapNextToSpeedEnabled = Helpers.parseBoolean(split, 45, false);
+        mIsRemapPlayToOKEnabled = Helpers.parseBoolean(split, 46, false);
         mHistoryState = Helpers.parseInt(split, 47, HISTORY_ENABLED);
         mRememberSubscriptionsPosition = Helpers.parseBoolean(split, 48, false);
         mSelectedSubscriptionsItem = Video.fromString(Helpers.parseStr(split, 49));
         mIsRemapNumbersToSpeedEnabled = Helpers.parseBoolean(split, 50, false);
+        mIsRemapDpadUpToSpeedEnabled = Helpers.parseBoolean(split, 51, false);
+        mIsRemapChannelUpToVolumeEnabled = Helpers.parseBoolean(split, 52, false);
+        mIsRemapDpadUpToVolumeEnabled = Helpers.parseBoolean(split, 53, false);
+        mIsRemapDpadLeftToVolumeEnabled = Helpers.parseBoolean(split, 54, false);
+        mIsRemapNextToFastForwardEnabled = Helpers.parseBoolean(split, 55, false);
+        mIsHideWatchedFromNotificationsEnabled = Helpers.parseBoolean(split, 56, false);
+        mChangelog = Helpers.parseStrList(split, 57);
+        mPlayerExitShortcut = Helpers.parseInt(split, 58, EXIT_SINGLE_BACK);
+        // StackOverflow on old devices?
+        mIsOldChannelLookEnabled = Helpers.parseBoolean(split, 59, Build.VERSION.SDK_INT <= 19);
+        mIsFullscreenModeEnabled = Helpers.parseBoolean(split, 60, !Helpers.isTouchSupported(mContext));
+        mIsHideWatchedFromWatchLaterEnabled = Helpers.parseBoolean(split, 61, false);
 
         if (pinnedItems != null && !pinnedItems.isEmpty()) {
             String[] pinnedItemsArr = Helpers.splitArray(pinnedItems);
@@ -924,27 +1054,26 @@ public class GeneralData implements ProfileChangeListener {
     }
 
     private void persistState() {
-        String pinnedItems = Helpers.mergeArray(mPinnedItems.toArray());
-        String pendingStreams = Helpers.mergeArray(mPendingStreams.toArray());
         List<String> playlistOrderPairs = new ArrayList<>();
         for (Entry<String, Integer> pair : mPlaylistOrder.entrySet()) {
             playlistOrderPairs.add(String.format("%s|%s", pair.getKey(), pair.getValue()));
         }
-        String playlistOrder = Helpers.mergeArray(playlistOrderPairs.toArray());
+        String playlistOrder = Helpers.mergeList(playlistOrderPairs);
         // Zero index is skipped. Selected sections were there.
-        mPrefs.setProfileData(GENERAL_DATA, Helpers.mergeObject(null, mBootSectionId, mIsSettingsSectionEnabled, mAppExitShortcut,
-                mIsReturnToLauncherEnabled,mBackgroundShortcut, pinnedItems, mIsHideShortsFromSubscriptionsEnabled,
+        mPrefs.setProfileData(GENERAL_DATA, Helpers.mergeObject(null, mBootSectionId, mIsSettingsSectionEnabled, mAppExitShortcut, mIsPlayerOnlyModeEnabled, mBackgroundShortcut, Helpers.mergeList(mPinnedItems), mIsHideShortsFromSubscriptionsEnabled,
                 mIsRemapFastForwardToNextEnabled, null,
                 mIsProxyEnabled, mIsBridgeCheckEnabled, mIsOkButtonLongPressDisabled, mLastPlaylistId,
                 null, mIsHideUpcomingEnabled, mIsRemapPageUpToNextEnabled, mIsRemapPageUpToLikeEnabled,
                 mIsRemapChannelUpToNextEnabled, mIsRemapChannelUpToLikeEnabled, mIsRemapPageUpToSpeedEnabled,
                 mIsRemapChannelUpToSpeedEnabled, mIsRemapFastForwardToSpeedEnabled, mIsRemapChannelUpToSearchEnabled,
                 mIsHideShortsFromHomeEnabled, mIsHideShortsFromHistoryEnabled, mIsScreensaverDisabled, mIsVPNEnabled, mLastPlaylistTitle,
-                playlistOrder, pendingStreams, mIsGlobalClockEnabled, mTimeFormat, mSettingsPassword, mIsChildModeEnabled, mIsHistoryEnabled,
+                playlistOrder, Helpers.mergeList(mPendingStreams), mIsGlobalClockEnabled, mTimeFormat, mSettingsPassword, mIsChildModeEnabled, mIsHistoryEnabled,
                 mScreensaverTimeoutMs, null, mIsAltAppIconEnabled, mVersionCode, mIsSelectChannelSectionEnabled, mMasterPassword,
-                mIsOldHomeLookEnabled, mIsOldUpdateNotificationsEnabled, mScreensaverDimmingPercents, mIsRemapNextPrevToSpeedEnabled,
-                mIsRemapPlayPauseToOKEnabled, mHistoryState, mRememberSubscriptionsPosition, Helpers.toString(mSelectedSubscriptionsItem),
-                mIsRemapNumbersToSpeedEnabled));
+                mIsOldHomeLookEnabled, mIsOldUpdateNotificationsEnabled, mScreensaverDimmingPercents, mIsRemapNextToSpeedEnabled, mIsRemapPlayToOKEnabled, mHistoryState,
+                mRememberSubscriptionsPosition, Helpers.toString(mSelectedSubscriptionsItem),
+                mIsRemapNumbersToSpeedEnabled, mIsRemapDpadUpToSpeedEnabled, mIsRemapChannelUpToVolumeEnabled, mIsRemapDpadUpToVolumeEnabled,
+                mIsRemapDpadLeftToVolumeEnabled, mIsRemapNextToFastForwardEnabled, mIsHideWatchedFromNotificationsEnabled, Helpers.mergeList(mChangelog), mPlayerExitShortcut,
+                mIsOldChannelLookEnabled, mIsFullscreenModeEnabled, mIsHideWatchedFromWatchLaterEnabled));
     }
 
     private int getSectionId(Video item) {
@@ -952,7 +1081,7 @@ public class GeneralData implements ProfileChangeListener {
             return -1;
         }
 
-        return item.extra == -1 ? item.hashCode() : item.extra;
+        return item.sectionId == -1 ? item.hashCode() : item.sectionId;
     }
 
     @Override

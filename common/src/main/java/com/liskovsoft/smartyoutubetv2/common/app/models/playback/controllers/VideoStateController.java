@@ -177,7 +177,7 @@ public class VideoStateController extends PlayerEventListenerHelper implements M
     }
 
     @Override
-    public void onEngineError(int type, int rendererIndex, String message) {
+    public void onEngineError(int type, int rendererIndex, Throwable error) {
         // Oops. Error happens while playing (network lost etc).
         if (getPlayer().getPositionMs() > 1_000) {
             saveState();
@@ -204,6 +204,7 @@ public class VideoStateController extends PlayerEventListenerHelper implements M
         //restoreSubtitleFormat();
 
         restoreVolume();
+        restorePitch();
     }
 
     @Override
@@ -335,15 +336,15 @@ public class VideoStateController extends PlayerEventListenerHelper implements M
         // Reset position of music videos
         boolean isShort = state != null && state.durationMs < MUSIC_VIDEO_MAX_DURATION_MS && !mPlayerTweaksData.isRememberPositionOfShortVideosEnabled();
         boolean isVideoEnded = state != null && state.durationMs - state.positionMs < 3_000;
+        boolean isLive = item.isLive && !mPlayerTweaksData.isRememberPositionOfLiveVideosEnabled();
 
-        //if (isShort || isVideoEnded || item.isLive || !mGeneralData.isHistoryEnabled()) {
-        if (isShort || isVideoEnded || item.isLive) {
+        if (isShort || isVideoEnded || isLive) {
             resetPosition(item);
         }
     }
 
     private void resetGlobalSpeedIfNeeded() {
-        if (mPlayerData != null && !mPlayerData.isAllSpeedEnabled()) {
+        if (!mPlayerData.isAllSpeedEnabled()) {
             mPlayerData.setSpeed(1.0f);
         }
     }
@@ -411,7 +412,8 @@ public class VideoStateController extends PlayerEventListenerHelper implements M
     private void saveState() {
         savePosition();
         updateHistory();
-        //persistState();
+        //persistState(); // persist the state if the device reboots accidentally
+        hideWatchedContent();
     }
 
     private void savePosition() {
@@ -550,6 +552,10 @@ public class VideoStateController extends PlayerEventListenerHelper implements M
         getPlayer().setVolume(newVolume);
     }
 
+    private void restorePitch() {
+        getPlayer().setPitch(mPlayerData.getPitch());
+    }
+
     private void restoreFormats() {
         restoreVideoFormat();
         restoreAudioFormat();
@@ -607,6 +613,22 @@ public class VideoStateController extends PlayerEventListenerHelper implements M
         float posPercents1 = state.positionMs * 100f / state.durationMs;
         float posPercents2 = item.getPositionMs() * 100f / item.getDurationMs();
 
-        return Math.abs(posPercents1 - posPercents2) > 3 && state.timestamp < item.timestamp;
+        return (posPercents2 != 0 && Math.abs(posPercents1 - posPercents2) > 3) && state.timestamp < item.timestamp;
+    }
+
+    private void hideWatchedContent() {
+        Video video = getVideo();
+
+        if (video == null) {
+            return;
+        }
+
+        if (mGeneralData.isHideWatchedFromWatchLaterEnabled() && video.percentWatched > 95) {
+            AppDialogUtil.removeFromWatchLaterPlaylist(getContext(), video);
+        }
+
+        if (mGeneralData.isHideWatchedFromNotificationsEnabled()) {
+            MediaServiceManager.instance().hideNotification(video);
+        }
     }
 }

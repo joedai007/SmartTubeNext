@@ -52,7 +52,13 @@ public class AppDialogActivity extends MotherActivity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        return mGlobalKeyTranslator.translate(event) || super.dispatchKeyEvent(event);
+        //if (KeyHelpers.isConfirmKey(event.getKeyCode()) && !event.isLongPress()) {
+        //    return true;
+        //}
+
+        //return mGlobalKeyTranslator.translate(event) || super.dispatchKeyEvent(event);
+        KeyEvent newEvent = mGlobalKeyTranslator.translateAlt(event);
+        return super.dispatchKeyEvent(newEvent);
     }
 
     @Override

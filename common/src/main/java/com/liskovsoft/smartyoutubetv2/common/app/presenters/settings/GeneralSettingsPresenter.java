@@ -107,6 +107,10 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
     private void appendHideUnwantedContent(AppDialogPresenter settingsPresenter) {
         List<OptionItem> options = new ArrayList<>();
 
+        options.add(UiOptionItem.from(getContext().getString(R.string.hide_watched_from_watch_later),
+                option -> mGeneralData.hideWatchedFromWatchLater(option.isSelected()),
+                mGeneralData.isHideWatchedFromWatchLaterEnabled()));
+
         options.add(UiOptionItem.from(getContext().getString(R.string.hide_watched_from_home),
                 option -> mGeneralData.hideWatchedFromHome(option.isSelected()),
                 mGeneralData.isHideWatchedFromHomeEnabled()));
@@ -115,9 +119,9 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
                 option -> mGeneralData.hideWatchedFromSubscriptions(option.isSelected()),
                 mGeneralData.isHideWatchedFromSubscriptionsEnabled()));
 
-        //options.add(UiOptionItem.from(getContext().getString(R.string.hide_shorts_everywhere),
-        //        option -> mGeneralData.hideShortsEverywhere(option.isSelected()),
-        //        mGeneralData.isHideShortsEverywhereEnabled()));
+        options.add(UiOptionItem.from(getContext().getString(R.string.hide_watched_from_notifications),
+                option -> mGeneralData.hideWatchedFromNotifications(option.isSelected()),
+                mGeneralData.isHideWatchedFromNotificationsEnabled()));
 
         options.add(UiOptionItem.from(getContext().getString(R.string.hide_shorts_from_home),
                 option -> mGeneralData.hideShortsFromHome(option.isSelected()),
@@ -127,10 +131,6 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
                 option -> mGeneralData.hideShortsFromChannel(option.isSelected()),
                 mGeneralData.isHideShortsFromChannelEnabled()));
 
-        options.add(UiOptionItem.from(getContext().getString(R.string.hide_streams),
-                option -> mGeneralData.hideStreamsFromSubscriptions(option.isSelected()),
-                mGeneralData.isHideStreamsFromSubscriptionsEnabled()));
-
         options.add(UiOptionItem.from(getContext().getString(R.string.hide_shorts_from_history),
                 option -> mGeneralData.hideShortsFromHistory(option.isSelected()),
                 mGeneralData.isHideShortsFromHistoryEnabled()));
@@ -138,6 +138,10 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
         options.add(UiOptionItem.from(getContext().getString(R.string.hide_shorts_from_trending),
                 option -> mGeneralData.hideShortsFromTrending(option.isSelected()),
                 mGeneralData.isHideShortsFromTrendingEnabled()));
+
+        options.add(UiOptionItem.from(getContext().getString(R.string.hide_streams),
+                option -> mGeneralData.hideStreamsFromSubscriptions(option.isSelected()),
+                mGeneralData.isHideStreamsFromSubscriptionsEnabled()));
 
         options.add(UiOptionItem.from(getContext().getString(R.string.hide_upcoming),
                 option -> mGeneralData.hideUpcomingFromSubscriptions(option.isSelected()),
@@ -259,10 +263,10 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
         Collection<Video> pinnedItems = mGeneralData.getPinnedItems();
 
         for (Video item : pinnedItems) {
-            if (item != null && item.title != null) {
+            if (item != null && item.getTitle() != null) {
                 options.add(
                         UiOptionItem.from(
-                                item.title,
+                                item.getTitle(),
                                 optionItem -> mGeneralData.setBootSectionId(item.hashCode()),
                                 item.hashCode() == mGeneralData.getBootSectionId()
                         )
@@ -297,16 +301,32 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
         List<OptionItem> options = new ArrayList<>();
 
         options.add(UiOptionItem.from("Play/Pause -> OK",
-                option -> mGeneralData.remapPlayPauseToOK(option.isSelected()),
-                mGeneralData.isRemapPlayPauseToOKEnabled()));
+                option -> mGeneralData.remapPlayToOK(option.isSelected()),
+                mGeneralData.isRemapPlayToOKEnabled()));
+
+        options.add(UiOptionItem.from("DPAD RIGHT/LEFT -> Volume Up/Down",
+                option -> mGeneralData.remapDpadLeftToVolume(option.isSelected()),
+                mGeneralData.isRemapDpadLeftToVolumeEnabled()));
+
+        options.add(UiOptionItem.from("DPAD UP/DOWN -> Volume Up/Down",
+                option -> mGeneralData.remapDpadUpToVolume(option.isSelected()),
+                mGeneralData.isRemapDpadUpToVolumeEnabled()));
+
+        options.add(UiOptionItem.from("DPAD UP/DOWN -> Speed Up/Down",
+                option -> mGeneralData.remapDpadUpDownToSpeed(option.isSelected()),
+                mGeneralData.isRemapDpadUpToSpeedEnabled()));
 
         options.add(UiOptionItem.from("Numbers 3/1 -> Speed Up/Down",
                 option -> mGeneralData.remapNumbersToSpeed(option.isSelected()),
                 mGeneralData.isRemapNumbersToSpeedEnabled()));
 
+        options.add(UiOptionItem.from("Next/Previous -> Fast Forward/Rewind",
+                option -> mGeneralData.remapNextToFastForward(option.isSelected()),
+                mGeneralData.isRemapNextToFastForwardEnabled()));
+
         options.add(UiOptionItem.from("Next/Previous -> Speed Up/Down",
-                option -> mGeneralData.remapNextPrevToSpeed(option.isSelected()),
-                mGeneralData.isRemapNextPrevToSpeedEnabled()));
+                option -> mGeneralData.remapNextToSpeed(option.isSelected()),
+                mGeneralData.isRemapNextToSpeedEnabled()));
 
         options.add(UiOptionItem.from("Fast Forward/Rewind -> Next/Previous",
                 option -> mGeneralData.remapFastForwardToNext(option.isSelected()),
@@ -327,6 +347,10 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
         options.add(UiOptionItem.from("Page Up/Down -> Speed Up/Down",
                 option -> mGeneralData.remapPageUpToSpeed(option.isSelected()),
                 mGeneralData.isRemapPageUpToSpeedEnabled()));
+
+        options.add(UiOptionItem.from("Channel Up/Down -> Volume Up/Down",
+                option -> mGeneralData.remapChannelUpToVolume(option.isSelected()),
+                mGeneralData.isRemapChannelUpToVolumeEnabled()));
 
         options.add(UiOptionItem.from("Channel Up/Down -> Next/Previous",
                 option -> mGeneralData.remapChannelUpToNext(option.isSelected()),
@@ -482,6 +506,10 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
     private void appendMiscCategory(AppDialogPresenter settingsPresenter) {
         List<OptionItem> options = new ArrayList<>();
 
+        options.add(UiOptionItem.from(getContext().getString(R.string.player_only_mode),
+                option -> mGeneralData.enablePlayerOnlyMode(option.isSelected()),
+                mGeneralData.isPlayerOnlyModeEnabled()));
+
         options.add(UiOptionItem.from(getContext().getString(R.string.multi_profiles),
                 option -> {
                     AppPrefs.instance(getContext()).enableMultiProfiles(option.isSelected());
@@ -546,6 +574,20 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
                 },
                 mGeneralData.isOldHomeLookEnabled()));
 
+        options.add(UiOptionItem.from(getContext().getString(R.string.old_channel_look),
+                option -> {
+                    mGeneralData.enableOldChannelLook(option.isSelected());
+                    mMainUIData.enableChannelSearchBar(!option.isSelected());
+                },
+                mGeneralData.isOldChannelLookEnabled()));
+
+        options.add(UiOptionItem.from(getContext().getString(R.string.fullscreen_mode),
+                option -> {
+                    mGeneralData.enableFullscreenMode(option.isSelected());
+                    mRestartApp = true;
+                },
+                mGeneralData.isFullscreenModeEnabled()));
+
         options.add(UiOptionItem.from(getContext().getString(R.string.remember_position_subscriptions),
                 option -> mGeneralData.rememberSubscriptionsPosition(option.isSelected()),
                 mGeneralData.isRememberSubscriptionsPositionEnabled()));
@@ -553,10 +595,6 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
         options.add(UiOptionItem.from(getContext().getString(R.string.disable_screensaver),
                 option -> mGeneralData.disableScreensaver(option.isSelected()),
                 mGeneralData.isScreensaverDisabled()));
-
-        options.add(UiOptionItem.from(getContext().getString(R.string.return_to_launcher),
-                option -> mGeneralData.enableReturnToLauncher(option.isSelected()),
-                mGeneralData.isReturnToLauncherEnabled()));
 
         options.add(UiOptionItem.from(getContext().getString(R.string.select_channel_section),
                 option -> mGeneralData.enableSelectChannelSection(option.isSelected()),
@@ -612,7 +650,7 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
                     PlayerTweaksData.PLAYER_BUTTON_PIP | PlayerTweaksData.PLAYER_BUTTON_VIDEO_SPEED | PlayerTweaksData.PLAYER_BUTTON_SUBTITLES |
                     PlayerTweaksData.PLAYER_BUTTON_VIDEO_ZOOM | PlayerTweaksData.PLAYER_BUTTON_ADD_TO_PLAYLIST;
         long menuItems = MainUIData.MENU_ITEM_SHOW_QUEUE | MainUIData.MENU_ITEM_ADD_TO_QUEUE | MainUIData.MENU_ITEM_PLAY_NEXT |
-                    MainUIData.MENU_ITEM_SELECT_ACCOUNT | MainUIData.MENU_ITEM_STREAM_REMINDER | MainUIData.MENU_ITEM_SAVE_PLAYLIST;
+                    MainUIData.MENU_ITEM_SELECT_ACCOUNT | MainUIData.MENU_ITEM_STREAM_REMINDER | MainUIData.MENU_ITEM_SAVE_REMOVE_PLAYLIST;
 
         PlayerTweaksData tweaksData = PlayerTweaksData.instance(getContext());
         SearchData searchData = SearchData.instance(getContext());
@@ -707,8 +745,9 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
         menuNames.put(MainUIData.MENU_ITEM_SHOW_QUEUE, R.string.action_playback_queue);
         menuNames.put(MainUIData.MENU_ITEM_STREAM_REMINDER, R.string.set_stream_reminder);
         menuNames.put(MainUIData.MENU_ITEM_SUBSCRIBE, R.string.subscribe_unsubscribe_from_channel);
-        menuNames.put(MainUIData.MENU_ITEM_SAVE_PLAYLIST, R.string.save_remove_playlist);
+        menuNames.put(MainUIData.MENU_ITEM_SAVE_REMOVE_PLAYLIST, R.string.save_remove_playlist);
         menuNames.put(MainUIData.MENU_ITEM_CREATE_PLAYLIST, R.string.create_playlist);
+        menuNames.put(MainUIData.MENU_ITEM_RENAME_PLAYLIST, R.string.rename_playlist);
         menuNames.put(MainUIData.MENU_ITEM_ADD_TO_NEW_PLAYLIST, R.string.add_video_to_new_playlist);
         menuNames.put(MainUIData.MENU_ITEM_ADD_TO_PLAYLIST, R.string.dialog_add_to_playlist);
         menuNames.put(MainUIData.MENU_ITEM_RECENT_PLAYLIST, R.string.add_remove_from_recent_playlist);

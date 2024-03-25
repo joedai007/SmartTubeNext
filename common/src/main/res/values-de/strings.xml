@@ -43,7 +43,7 @@
     <string name="section_is_empty">Hier ist nichts drin</string>
     <string name="dialog_add_to_playlist">Hinzufügen/Entfernen aus Wiedergabeliste</string>
     <string name="msg_signed_users_only">Nur angemeldete Nutzer</string>
-    <string name="msg_cant_load_content">Inhalt kann nicht geladen werden.\n1) Überprüfen Sie Datum und Uhrzeit auf dem Gerät.\n2) Überprüfen Sie die Internetverbindung.\n3) Überprüfen Sie Ihre Proxy-Einstellungen.\n4) Versuchen Sie, sich mit Ihrem Konto anzumelden.\n5) Vielleicht ist hier nichts drin.</string>
+    <string name="msg_cant_load_content">Inhalt kann nicht geladen werden.\n1) Aktivieren Sie den Wiedergabeverlauf.\n2) Überprüfen Sie Datum und Uhrzeit auf dem Gerät.\n3) Überprüfen Sie die Internetverbindung.\n4) Überprüfen Sie Ihre Proxy-Einstellungen.\n5) Versuchen Sie, sich mit Ihrem Konto anzumelden.\n6) Vielleicht ist hier nichts drin.</string>
     <string name="title_video_presets">Video-Voreinstellungen</string>
     <string name="settings_accounts">Konten</string>
     <string name="settings_left_panel">Kategorien bearbeiten</string>
@@ -136,6 +136,7 @@
     <string name="player_show_ending_time">Endzeit im Bedienfeld anzeigen</string>
     <string name="open_channel_uploads">Kanal-Videos öffnen</string>
     <string name="app_exit_shortcut">App beenden</string>
+    <string name="player_exit_shortcut">Player beenden</string>
     <string name="app_exit_none">Nicht beenden</string>
     <string name="app_double_back_exit">2x Zurück-Taste</string>
     <string name="app_single_back_exit">1x Zurück-Taste</string>
@@ -153,7 +154,7 @@
     <string name="player_seek_preview_carousel">Mehrere Bilder</string>
     <string name="player_seek_preview_carousel_slow">Mehrere Bilder (langsam, nach Keyframes)</string>
     <string name="player_seek_preview_carousel_fast">Mehrere Bilder (schnell, ungenaue Vorschau)</string>
-    <string name="unsubscribe_from_channel">Kanal-Abo beenden</string>
+    <string name="unsubscribe_from_channel">Kanal nicht mehr abonnieren</string>
     <string name="card_title_lines_num">Zeilenanzahl in Titeln</string>
     <string name="card_auto_scrolled_title">Auto-Scrollen in Titeln</string>
     <string name="share_link">Link teilen</string>
@@ -230,6 +231,8 @@
     <string name="pin_unpin_from_sidebar">Hinzufügen/Entfernen aus Seitenleiste</string>
     <string name="pin_unpin_playlist">Wiedergabeliste zur Seitenleiste hinzufügen/entfernen</string>
     <string name="pin_unpin_channel">Kanal zur Seitenleiste hinzufügen/entfernen</string>
+    <string name="pin_playlist">Wiedergabeliste zur Seitenleiste hinzufügen</string>
+    <string name="pin_channel">Kanal zur Seitenleiste hinzufügen</string>
     <string name="pinned_to_sidebar">Zur Seitenleiste hinzugefügt</string>
     <string name="unpin_from_sidebar">Entfernen aus Seitenleiste</string>
     <string name="unpinned_from_sidebar">Aus Seitenleiste entfernt</string>
@@ -308,6 +311,7 @@
     <string name="action_pip">Bild-in-Bild</string>
     <string name="action_video_info">Video-Beschreibung</string>
     <string name="action_screen_off">Bildschirm aus</string>
+    <string name="action_sound_off">Ton aus</string>
     <string name="action_playback_queue">Warteschlange</string>
     <string name="action_video_speed">Video-Geschwindigkeit</string>
     <string name="action_subtitles">Untertitel anzeigen</string>
@@ -401,6 +405,7 @@
     <string name="player_volume">Lautstärke</string>
     <string name="play_video">Abspielen</string>
     <string name="remember_position_of_short_videos">Position von kurzen Videos merken (weniger als 5 Min.)</string>
+    <string name="remember_position_of_live_videos">Position von Live-Streams merken</string>
     <string name="player_show_tooltips">Schaltflächen-Tooltips anzeigen</string>
     <string name="action_like_unset">Mag ich</string>
     <string name="action_dislike_unset">Mag ich nicht</string>
@@ -412,6 +417,7 @@
     <string name="pressing_back">durch Drücken von BACK</string>
     <string name="player_number_key_seek">Spulen mit Zifferntasten</string>
     <string name="save_remove_playlist">Wiedergabeliste zur Wiedergabelisten-Kategorie hinzufügen/entfernen</string>
+    <string name="save_playlist">Wiedergabeliste zur Wiedergabelisten-Kategorie hinzufügen</string>
     <string name="remove_playlist">Wiedergabeliste dauerhaft aus Wiedergabelisten-Kategorie entfernen</string>
     <string name="removed_from_playlists">Entfernt aus der Wiedergabelisten-Kategorie</string>
     <string name="saved_to_playlists">Hinzugefügt zur Wiedergabelisten-Kategorie</string>
@@ -501,7 +507,8 @@
     <string name="thumb_quality_start">Start des Videos</string>
     <string name="thumb_quality_middle">Mitte des Videos</string>
     <string name="thumb_quality_end">Ende des Videos</string>
-    <string name="content_block_status">Status von SponsorBlock prüfen</string>
+    <string name="content_block_status">Server-Status von SponsorBlock prüfen</string>
+    <string name="dearrow_status">Server-Status von DeArrow prüfen</string>
     <string name="player_show_quality_info_bitrate">Bitrate zu den Qualitätsinfos hinzufügen</string>
     <string name="player_speed_button_old_behavior">Altes Verhalten der Geschwindigkeitstaste wiederherstellen</string>
     <string name="protect_settings_with_password">Alle Einstellungen mit einem Passwort schützen</string>
@@ -563,6 +570,7 @@
     <string name="sony_frame_drop_fix_desc">Behebt Verzögerungen/Lags auf Sony-TV und einigen anderen Geräten. Hinweis: Mögliche Probleme mit der Audio-Synchronisation.</string>
     <string name="audio_language">Audio-Sprache</string>
     <string name="old_home_look">Altes Aussehen der Startseite</string>
+    <string name="old_channel_look">Altes Aussehen der Kanäle-Kategorie</string>
     <string name="hide_shorts_everywhere">Shorts überall ausblenden</string>
     <string name="update_found">Update</string>
     <string name="volume_boost_warning">Einstellungen über dem Grenzwert können die Lautsprecher möglicherweise beschädigen</string>
@@ -613,10 +621,37 @@
     <string name="prefer_avc_over_vp9_desc">ACHTUNG: Maximal 1080p</string>
     <string name="play_next">Als Nächstes abspielen</string>
     <string name="hide_watched_from_subscriptions">Gesehene Videos in Abos ausblenden</string>
+    <string name="hide_watched_from_notifications">Gesehene Videos in Benachrichtigungen ausblenden</string>
     <string name="hide_unwanted_content">Unerwünschte Inhalte ausblenden</string>
     <string name="hide_watched_from_home">Gesehene Videos in Start ausblenden</string>
+    <string name="hide_watched_from_watch_later">Gesehene Videos in Wiedergabeliste Später ansehen ausblenden</string>
     <string name="remote_control_permission">Hintergrund-Fernsteuerung benötigt Overlay-Berechtigung</string>
     <string name="login_from_browser">Anmeldung über Browser</string>
     <string name="disable_remote_history">Verlauf bei Verwendung der Fernsteuerung deaktivieren</string>
     <string name="keyboard_fix">Reparieren der Anzeige der Tastatur beim Drücken der OK-Taste (G20s und andere)</string>
+    <string name="nothing_found">Nichts gefunden</string>
+    <string name="auto_frame_rate_desc">Diese Option verhindert Ruckeln in Szenen, in denen sich die Kamera schnell bewegt, z.B. bei Sportübertragungen</string>
+    <string name="channel_filter_hint">Kanäle filtern</string>
+    <string name="player_loop_shorts">Shorts wiederholen</string>
+    <string name="player_quick_shorts_skip">Shorts überspringen mit Links/Rechts-Tasten</string>
+    <string name="channels_filter">Suchfeld in der Kanäle-Kategorie anzeigen</string>
+    <string name="channel_search_bar">Suchleiste innerhalb der Kanalseite</string>
+    <string name="header_sports">Sport</string>
+    <string name="keep_finished_activities">Beendete Aktivitäten behalten</string>
+    <string name="disable_channels_service">Kanäle-Dienst deaktivieren</string>
+    <string name="replace_titles">Titel ersetzen</string>
+    <string name="enable">Aktivieren</string>
+    <string name="more_info">Mehr Infos</string>
+    <string name="about_sponsorblock">Über SponsorBlock</string>
+    <string name="about_dearrow">Über DeArrow</string>
+    <string name="replace_thumbnails">Vorschaubilder ersetzen</string>
+    <string name="crowdsourced_thumbnails">Community-basierte Vorschaubilder</string>
+    <string name="crowdsoursed_titles">Community-basierte Titel</string>
+    <string name="dearrow_not_submitted_thumbs">Quelle für nicht eingereichte Vorschaubilder</string>
+    <string name="pitch_effect">Tonhöhen-Effekt</string>
+    <string name="fullscreen_mode">Vollbildmodus (ohne Systemleisten)</string>
+    <string name="player_only_mode">Nur den Player anzeigen, wenn das Video außerhalb der App geöffnet wird</string>
+    <string name="pinned_channel_rows">Angeheftete Kanäle als Reihen anzeigen</string>
+    <string name="prefer_ipv4">IPv4 DNS bevorzugen</string>
+    <string name="prefer_ipv4_desc">Könnte Situationen beheben, in denen die App überhaupt nicht funktioniert.\nHinweis: Kann Einfrieren und Abstürze verursachen (besonders auf Android 8 Geräten oder Dune HD)</string>
 </resources>
