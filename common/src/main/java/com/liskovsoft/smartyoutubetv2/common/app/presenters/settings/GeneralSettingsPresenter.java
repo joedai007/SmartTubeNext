@@ -2,7 +2,7 @@ package com.liskovsoft.smartyoutubetv2.common.app.presenters.settings;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
-import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
+import com.liskovsoft.mediaserviceinterfaces.yt.data.MediaGroup;
 import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.sharedutils.helpers.MessageHelpers;
 import com.liskovsoft.sharedutils.okhttp.OkHttpManager;
@@ -211,11 +211,12 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
             options.add(UiOptionItem.from((i + 1) + " " + getContext().getString(nameResId), optionItem -> {
                 if (optionItem.isSelected()) {
                     mMainUIData.setMenuItemIndex(index, menuItem);
+                    dialog.goBack();
 
-                    AppDialogPresenter settingsPresenter = AppDialogPresenter.instance(getContext());
-                    settingsPresenter.clearBackstack();
-                    appendContextMenuItemsCategory(settingsPresenter);
-                    settingsPresenter.showDialog();
+                    //AppDialogPresenter settingsPresenter = AppDialogPresenter.instance(getContext());
+                    //settingsPresenter.clearBackstack();
+                    //appendContextMenuItemsCategory(settingsPresenter);
+                    //settingsPresenter.showDialog();
                 }
             }, currentIndex == i));
         }
@@ -506,7 +507,7 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
     private void appendMiscCategory(AppDialogPresenter settingsPresenter) {
         List<OptionItem> options = new ArrayList<>();
 
-        options.add(UiOptionItem.from(getContext().getString(R.string.player_only_mode),
+        options.add(UiOptionItem.from(getContext().getString(R.string.return_to_launcher),
                 option -> mGeneralData.enablePlayerOnlyMode(option.isSelected()),
                 mGeneralData.isPlayerOnlyModeEnabled()));
 
@@ -592,6 +593,10 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
                 option -> mGeneralData.rememberSubscriptionsPosition(option.isSelected()),
                 mGeneralData.isRememberSubscriptionsPositionEnabled()));
 
+        options.add(UiOptionItem.from(getContext().getString(R.string.remember_position_pinned),
+                option -> mGeneralData.rememberPinnedPosition(option.isSelected()),
+                mGeneralData.isRememberPinnedPositionEnabled()));
+
         options.add(UiOptionItem.from(getContext().getString(R.string.disable_screensaver),
                 option -> mGeneralData.disableScreensaver(option.isSelected()),
                 mGeneralData.isScreensaverDisabled()));
@@ -599,6 +604,13 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
         options.add(UiOptionItem.from(getContext().getString(R.string.select_channel_section),
                 option -> mGeneralData.enableSelectChannelSection(option.isSelected()),
                 mGeneralData.isSelectChannelSectionEnabled()));
+
+        options.add(UiOptionItem.from(getContext().getString(R.string.player_show_tooltips) + ": " + getContext().getString(R.string.long_press_for_settings),
+                option -> {
+                    mGeneralData.enableFirstUseTooltip(option.isSelected());
+                    mRestartApp = true;
+                },
+                mGeneralData.isFirstUseTooltipEnabled()));
 
         //// Disable long press on buggy controllers.
         //options.add(UiOptionItem.from(getContext().getString(R.string.disable_ok_long_press),

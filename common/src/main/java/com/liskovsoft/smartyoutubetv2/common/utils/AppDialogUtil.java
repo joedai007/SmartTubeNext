@@ -5,9 +5,9 @@ import android.annotation.TargetApi;
 import android.content.Context;
 import android.os.Build;
 
-import com.liskovsoft.mediaserviceinterfaces.MediaItemService;
-import com.liskovsoft.mediaserviceinterfaces.data.MediaItem;
-import com.liskovsoft.mediaserviceinterfaces.data.PlaylistInfo;
+import com.liskovsoft.mediaserviceinterfaces.yt.MediaItemService;
+import com.liskovsoft.mediaserviceinterfaces.yt.data.MediaItem;
+import com.liskovsoft.mediaserviceinterfaces.yt.data.PlaylistInfo;
 import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.sharedutils.helpers.MessageHelpers;
 import com.liskovsoft.sharedutils.mylogger.Log;
@@ -658,7 +658,9 @@ public class AppDialogUtil {
     public static OptionCategory createSpeedListCategory(Context context, PlayerManager playbackController, PlayerData playerData) {
         List<OptionItem> items = new ArrayList<>();
 
-        for (float speed : PlayerTweaksData.instance(context).isLongSpeedListEnabled() ? Utils.SPEED_LIST_LONG : Utils.SPEED_LIST_SHORT) {
+        PlayerTweaksData data = PlayerTweaksData.instance(context);
+        for (float speed : data.isLongSpeedListEnabled() ? Utils.SPEED_LIST_LONG :
+                data.isExtraLongSpeedListEnabled() ? Utils.SPEED_LIST_EXTRA_LONG : Utils.SPEED_LIST_SHORT) {
             items.add(UiOptionItem.from(
                     String.valueOf(speed),
                     optionItem -> {
@@ -709,6 +711,10 @@ public class AppDialogUtil {
         options.add(UiOptionItem.from(context.getString(R.string.player_long_speed_list),
                 option -> playerTweaksData.enableLongSpeedList(option.isSelected()),
                 playerTweaksData.isLongSpeedListEnabled()));
+
+        options.add(UiOptionItem.from(context.getString(R.string.player_extra_long_speed_list),
+                option -> playerTweaksData.enableExtraLongSpeedList(option.isSelected()),
+                playerTweaksData.isExtraLongSpeedListEnabled()));
 
         String title = context.getString(R.string.player_other);
 

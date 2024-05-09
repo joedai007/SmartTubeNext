@@ -115,7 +115,6 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     private int mPlaybackMode = PlayerEngine.BACKGROUND_MODE_DEFAULT;
     private MediaSessionCompat mMediaSession;
     private MediaSessionConnector mMediaSessionConnector;
-    private long mResumeTimeMs;
     private Boolean mIsControlsShownPreviously;
     private Video mPendingFocus;
 
@@ -205,8 +204,6 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         mEventListener.onViewResumed();
 
         showHideWidgets(true); // PIP mode fix
-
-        mResumeTimeMs = System.currentTimeMillis();
     }
 
     @Override
@@ -548,15 +545,15 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
                 // Fix exoplayer pause after activity is resumed (AFR switching).
                 // It's tied to activity state transitioning because window has different mode.
                 // NOTE: may be a problems with background playback or bluetooth button events
-                if (System.currentTimeMillis() - mResumeTimeMs < 5_000 ||
-                        (!isResumed() && !isInPIPMode() && !AppDialogPresenter.instance(getContext()).isDialogShown())
-                ) {
-                    return false;
-                }
-
-                //if (System.currentTimeMillis() - mResumeTimeMs < 5_000) {
+                //if (System.currentTimeMillis() - mResumeTimeMs < 5_000 ||
+                //        (!isResumed() && !isInPIPMode() && !AppDialogPresenter.instance(getContext()).isDialogShown())
+                //) {
                 //    return false;
                 //}
+
+                if (System.currentTimeMillis() - PlayerData.instance(getContext()).getAfrSwitchTimeMs() < 5_000) {
+                    return false;
+                }
 
                 return super.dispatchSetPlayWhenReady(player, playWhenReady);
             }
@@ -842,19 +839,19 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         CharSequence result = video.getSecondTitle();
 
         if (getContext() != null && video.isLive) {
-            result = TextUtils.concat( result, " ", Video.TERTIARY_TEXT_DELIM, Helpers.NON_BREAKING_SPACE, Utils.color(getContext().getString(R.string.badge_live), ContextCompat.getColor(getContext(), R.color.red)));
+            result = TextUtils.concat( result, " ", Video.TERTIARY_TEXT_DELIM, " ", Utils.color(getContext().getString(R.string.badge_live), ContextCompat.getColor(getContext(), R.color.red)));
         }
 
         if (getContext() != null && video.likeCount != null) {
-            result = TextUtils.concat(result, " ", Video.TERTIARY_TEXT_DELIM, Helpers.NON_BREAKING_SPACE, video.likeCount, Helpers.NON_BREAKING_SPACE, Helpers.THUMB_UP); // color of thumb cannot be changed
+            result = TextUtils.concat(result, " ", Video.TERTIARY_TEXT_DELIM, " ", video.likeCount, Helpers.NON_BREAKING_SPACE, Helpers.THUMB_UP); // color of thumb cannot be changed
         }
 
         if (getContext() != null && video.dislikeCount != null) {
-            result = TextUtils.concat(result, " ", Video.TERTIARY_TEXT_DELIM, Helpers.NON_BREAKING_SPACE, video.dislikeCount, Helpers.NON_BREAKING_SPACE, Helpers.THUMB_DOWN); // color of thumb cannot be changed
+            result = TextUtils.concat(result, " ", Video.TERTIARY_TEXT_DELIM, " ", video.dislikeCount, Helpers.NON_BREAKING_SPACE, Helpers.THUMB_DOWN); // color of thumb cannot be changed
         }
 
         if (getContext() != null && video.subscriberCount != null) {
-            result = TextUtils.concat(result, " ", Video.TERTIARY_TEXT_DELIM, Helpers.NON_BREAKING_SPACE, video.subscriberCount.replace(" ", Helpers.NON_BREAKING_SPACE));
+            result = TextUtils.concat(result, " ", Video.TERTIARY_TEXT_DELIM, " ", video.subscriberCount.replace(" ", Helpers.NON_BREAKING_SPACE));
         }
 
         return result;

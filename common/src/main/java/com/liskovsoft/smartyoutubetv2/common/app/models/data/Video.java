@@ -5,20 +5,20 @@ import android.text.TextUtils;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import com.liskovsoft.mediaserviceinterfaces.data.ChapterItem;
-import com.liskovsoft.mediaserviceinterfaces.data.DislikeData;
-import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
-import com.liskovsoft.mediaserviceinterfaces.data.MediaItem;
-import com.liskovsoft.mediaserviceinterfaces.data.MediaItemFormatInfo;
-import com.liskovsoft.mediaserviceinterfaces.data.MediaItemMetadata;
-import com.liskovsoft.mediaserviceinterfaces.data.NotificationState;
-import com.liskovsoft.mediaserviceinterfaces.data.PlaylistInfo;
+import com.liskovsoft.mediaserviceinterfaces.yt.data.ChapterItem;
+import com.liskovsoft.mediaserviceinterfaces.yt.data.DislikeData;
+import com.liskovsoft.mediaserviceinterfaces.yt.data.MediaGroup;
+import com.liskovsoft.mediaserviceinterfaces.yt.data.MediaItem;
+import com.liskovsoft.mediaserviceinterfaces.yt.data.MediaItemFormatInfo;
+import com.liskovsoft.mediaserviceinterfaces.yt.data.MediaItemMetadata;
+import com.liskovsoft.mediaserviceinterfaces.yt.data.NotificationState;
+import com.liskovsoft.mediaserviceinterfaces.yt.data.PlaylistInfo;
 import com.liskovsoft.sharedutils.helpers.DateHelper;
 import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.sharedutils.helpers.MessageHelpers;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.service.VideoStateService;
 import com.liskovsoft.youtubeapi.common.helpers.ServiceHelper;
-import com.liskovsoft.youtubeapi.service.YouTubeHubService;
+import com.liskovsoft.youtubeapi.service.YouTubeMotherService;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -30,7 +30,6 @@ import java.util.List;
 public final class Video {
     public static final String TERTIARY_TEXT_DELIM = "•";
     public static final long MAX_LIVE_DURATION_MS = 24 * 60 * 60 * 1_000;
-    private static final String OBJ_DELIM = "&vi;";
     private static final int MAX_AUTHOR_LENGTH_CHARS = 20;
     private static final String BLACK_PLACEHOLDER_URL = "https://via.placeholder.com/1280x720/000000/000000";
     private static final float RESTORE_POSITION_PERCENTS = 10; // min value for immediately closed videos
@@ -280,6 +279,10 @@ public final class Video {
         this.group = new WeakReference<>(group);
     }
 
+    public int getPositionInsideGroup() {
+        return getGroup() != null && !getGroup().isEmpty() ? getGroup().getVideos().indexOf(this) : -1;
+    }
+
     private static String extractAuthor(String secondTitle) {
         String result = null;
 
@@ -323,7 +326,7 @@ public final class Video {
             return null;
         }
 
-        String[] split = Helpers.split(OBJ_DELIM, spec);
+        String[] split = Helpers.splitObj(spec);
 
         // 'playlistParams' backward compatibility
         if (split.length == 10) {
@@ -360,7 +363,7 @@ public final class Video {
         result.channelId = Helpers.parseStr(split[6]);
         result.bgImageUrl = Helpers.parseStr(split[7]);
         result.cardImageUrl = Helpers.parseStr(split[8]);
-        result.mediaItem = YouTubeHubService.deserializeMediaItem(Helpers.parseStr(split[9]));
+        result.mediaItem = YouTubeMotherService.deserializeMediaItem(Helpers.parseStr(split[9]));
         result.playlistParams = Helpers.parseStr(split[10]);
         result.sectionId = Helpers.parseInt(split[11]);
         result.reloadPageKey = Helpers.parseStr(split[12]);
@@ -372,9 +375,8 @@ public final class Video {
     @NonNull
     @Override
     public String toString() {
-        return Helpers.merge(OBJ_DELIM,
-                id, category, title, videoId, videoUrl, playlistId, channelId, bgImageUrl, cardImageUrl,
-                YouTubeHubService.serialize(mediaItem), playlistParams, sectionId, getReloadPageKey(), itemType);
+        return Helpers.mergeObj(id, category, title, videoId, videoUrl, playlistId, channelId, bgImageUrl, cardImageUrl,
+                YouTubeMotherService.serialize(mediaItem), playlistParams, sectionId, getReloadPageKey(), itemType);
     }
 
     //@Override

@@ -9,7 +9,9 @@ import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+
 import androidx.annotation.NonNull;
+
 import com.liskovsoft.sharedutils.helpers.FileHelpers;
 import com.liskovsoft.sharedutils.helpers.MessageHelpers;
 import com.liskovsoft.sharedutils.locale.LocaleUpdater;
@@ -24,7 +26,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.presenters.SplashPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.AppUpdatePresenter;
 import com.liskovsoft.smartyoutubetv2.common.misc.MotherActivity;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
-import com.liskovsoft.youtubeapi.service.YouTubeHubService;
+import com.liskovsoft.youtubeapi.service.YouTubeMotherService;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -290,55 +292,11 @@ public class ViewManager {
     }
 
     public void clearCaches() {
-        YouTubeHubService.instance().invalidateCache();
+        YouTubeMotherService.instance().invalidateCache();
         // Note, also deletes cached flags (internal cache)
         // Note, deletes cached apks (external cache)
         FileHelpers.deleteCache(mContext);
         LocaleUpdater.clearCache();
-    }
-
-    /**
-     * More info: https://stackoverflow.com/questions/6609414/how-do-i-programmatically-restart-an-android-app
-     */
-    private static void triggerRebirth(Context context, Class<?> rootActivity) {
-        Intent intent = new Intent(context, rootActivity);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        context.startActivity(intent);
-        if (context instanceof MotherActivity) {
-            ((MotherActivity) context).finishReally();
-        }
-        Runtime.getRuntime().exit(0);
-    }
-
-    /**
-     * More info: https://stackoverflow.com/questions/6609414/how-do-i-programmatically-restart-an-android-app
-     */
-    private static void triggerRebirth2(Context context, Class<?> rootActivity) {
-        Intent mStartActivity = new Intent(context, rootActivity);
-        int mPendingIntentId = 123456;
-        int flags = PendingIntent.FLAG_CANCEL_CURRENT;
-        if (Build.VERSION.SDK_INT >= 23) {
-            // IllegalArgumentException fix: Targeting S+ (version 31 and above) requires that one of FLAG_IMMUTABLE...
-            flags |= PendingIntent.FLAG_IMMUTABLE;
-        }
-        PendingIntent mPendingIntent = PendingIntent.getActivity(context, mPendingIntentId, mStartActivity, flags);
-        AlarmManager mgr = (AlarmManager)context.getSystemService(Context.ALARM_SERVICE);
-        mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 100, mPendingIntent);
-        System.exit(0);
-    }
-
-    public static void triggerRebirth3(Context context, Class<?> myClass) {
-        Intent intent = new Intent(context, myClass);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        context.startActivity(intent);
-        Runtime.getRuntime().exit(0);
-    }
-
-    private void exitToHome() {
-        Intent intent = new Intent(Intent.ACTION_MAIN);
-        intent.addCategory(Intent.CATEGORY_HOME);
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        safeStartActivity(mContext, intent);
     }
 
     /**
@@ -371,17 +329,6 @@ public class ViewManager {
                 mIsFinishing = false;
             }, 1_000);
         }
-    }
-
-    /**
-     * Simply kills the app.
-     */
-    public void forceFinishTheApp() {
-        destroyApp();
-    }
-
-    private static void destroyApp() {
-        Runtime.getRuntime().exit(0);
     }
 
     public Class<?> getTopView() {

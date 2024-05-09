@@ -2,10 +2,10 @@ package com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers;
 
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
-import com.liskovsoft.mediaserviceinterfaces.MediaItemService;
-import com.liskovsoft.mediaserviceinterfaces.HubService;
-import com.liskovsoft.mediaserviceinterfaces.data.MediaItemMetadata;
-import com.liskovsoft.mediaserviceinterfaces.data.SponsorSegment;
+import com.liskovsoft.mediaserviceinterfaces.yt.MediaItemService;
+import com.liskovsoft.mediaserviceinterfaces.yt.MotherService;
+import com.liskovsoft.mediaserviceinterfaces.yt.data.MediaItemMetadata;
+import com.liskovsoft.mediaserviceinterfaces.yt.data.SponsorSegment;
 import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.sharedutils.helpers.MessageHelpers;
 import com.liskovsoft.sharedutils.mylogger.Log;
@@ -13,7 +13,6 @@ import com.liskovsoft.smartyoutubetv2.common.R;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.PlayerEventListenerHelper;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.manager.PlayerUI;
-import com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.SuggestionsController.MetadataListener;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.OptionItem;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.SeekBarSegment;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.UiOptionItem;
@@ -22,7 +21,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.presenters.settings.ContentBloc
 import com.liskovsoft.smartyoutubetv2.common.prefs.ContentBlockData;
 import com.liskovsoft.sharedutils.rx.RxHelper;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
-import com.liskovsoft.youtubeapi.service.YouTubeHubService;
+import com.liskovsoft.youtubeapi.service.YouTubeMotherService;
 import io.reactivex.Observable;
 import io.reactivex.disposables.Disposable;
 
@@ -30,7 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-public class ContentBlockController extends PlayerEventListenerHelper implements MetadataListener {
+public class ContentBlockController extends PlayerEventListenerHelper {
     private static final String TAG = ContentBlockController.class.getSimpleName();
     private static final long POLL_INTERVAL_MS = 1_000;
     private static final int CONTENT_BLOCK_ID = 144;
@@ -82,8 +81,8 @@ public class ContentBlockController extends PlayerEventListenerHelper implements
 
     @Override
     public void onInit() {
-        HubService hubService = YouTubeHubService.instance();
-        mMediaItemService = hubService.getMediaItemService();
+        MotherService service = YouTubeMotherService.instance();
+        mMediaItemService = service.getMediaItemService();
         mContentBlockData = ContentBlockData.instance(getContext());
     }
 
@@ -99,10 +98,10 @@ public class ContentBlockController extends PlayerEventListenerHelper implements
     public void onVideoLoaded(Video item) {
         disposeActions();
 
-        boolean enabled = mContentBlockData.isSponsorBlockEnabled() && !isChannelExcluded(item.channelId);
+        boolean enabled = mContentBlockData.isSponsorBlockEnabled();
         getPlayer().setButtonState(R.id.action_content_block, enabled ? PlayerUI.BUTTON_ON : PlayerUI.BUTTON_OFF);
 
-        if (enabled && checkVideo(item)) {
+        if (enabled && checkVideo(item) && !isChannelExcluded(item.channelId)) {
             updateSponsorSegmentsAndWatch(item);
         }
     }
